@@ -83,10 +83,69 @@ export async function fetchCloudData(): Promise<{
 }
 
 /**
- * Upload a paper directly to Supabase cloud database
+ * Upload binary file to Supabase Storage Bucket and return public URL
+ */
+export async function uploadFileToStorage(
+  bucketName: 'papers' | 'resources',
+  fileOrDataUrl: File | string,
+  fileName: string
+): Promise<string> {
+  try {
+    let blob: Blob
+    let mimeType = 'application/pdf'
+
+    if (typeof fileOrDataUrl === 'string') {
+      const match = fileOrDataUrl.match(/^data:(.*?);base64,(.*)$/)
+      if (match) {
+        mimeType = match[1]
+        const byteCharacters = atob(match[2])
+        const byteNumbers = new Array(byteCharacters.length)
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i)
+        }
+        blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType })
+      } else {
+        return fileOrDataUrl
+      }
+    } else {
+      blob = fileOrDataUrl
+      mimeType = fileOrDataUrl.type
+    }
+
+    const cleanPath = `uploads/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .upload(cleanPath, blob, { upsert: true, contentType: mimeType })
+
+    if (error) {
+      console.warn(`Supabase Storage upload warning (${bucketName}):`, error.message)
+      // Return Data URL if storage upload failed
+      return typeof fileOrDataUrl === 'string' ? fileOrDataUrl : ''
+    }
+
+    const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(cleanPath)
+    return publicUrlData.publicUrl || (typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '')
+  } catch (err) {
+    console.warn('Storage upload fallback:', err)
+    return typeof fileOrDataUrl === 'string' ? fileOrDataUrl : ''
+  }
+}
+
+/**
+ * Upload a paper directly to Supabase cloud database & storage
  */
 export async function syncPaperToCloud(paper: Paper): Promise<void> {
   try {
+    let fileUrl = paper.file_url || ''
+
+    // If file_url is a Data URL, upload to Storage Bucket first to get a lean CDN URL
+    if (fileUrl.startsWith('data:')) {
+      const storageUrl = await uploadFileToStorage('papers', fileUrl, `${paper.subject_name}_paper.pdf`)
+      if (storageUrl && !storageUrl.startsWith('data:')) {
+        fileUrl = storageUrl
+      }
+    }
+
     const row = {
       id: toUuid(paper.id),
       subject_id: toUuid(paper.subject_id),
@@ -96,7 +155,7 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
       exam_label: paper.exam_label,
       academic_year: paper.academic_year,
       semester_number: paper.semester_number || 1,
-      file_url: paper.file_url,
+      file_url: fileUrl,
       uploaded_by: paper.uploaded_by,
       verification_status: 'verified',
       file_size: paper.file_size,
@@ -114,10 +173,19 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
 }
 
 /**
- * Upload a resource directly to Supabase cloud database
+ * Upload a resource directly to Supabase cloud database & storage
  */
 export async function syncResourceToCloud(resource: Resource): Promise<void> {
   try {
+    let fileUrl = resource.file_url || ''
+
+    if (fileUrl.startsWith('data:')) {
+      const storageUrl = await uploadFileToStorage('resources', fileUrl, `${resource.title}.pdf`)
+      if (storageUrl && !storageUrl.startsWith('data:')) {
+        fileUrl = storageUrl
+      }
+    }
+
     const row = {
       id: toUuid(resource.id),
       subject_id: toUuid(resource.subject_id),
@@ -126,7 +194,7 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
       type: resource.type,
       title: resource.title,
       description: resource.description,
-      file_url: resource.file_url,
+      file_url: fileUrl,
       uploaded_by: resource.uploaded_by,
       verification_status: 'verified',
       academic_year: resource.academic_year,

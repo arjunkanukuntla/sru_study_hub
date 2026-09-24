@@ -13,6 +13,8 @@ import {
   syncSubjectToCloud,
 } from './supabaseSync'
 
+import { supabase } from './supabase'
+
 interface AppState {
   subjects: Subject[]
   papers: Paper[]
@@ -48,15 +50,12 @@ export const useAppStore = create<AppState>()(
           const cloud = await fetchCloudData()
 
           set((state) => {
-            // Unique subjects
             const existingSubIds = new Set(state.subjects.map(s => s.id))
             const newSubjects = cloud.subjects.filter(s => !existingSubIds.has(s.id))
 
-            // Unique papers
             const existingPaperIds = new Set(state.papers.map(p => p.id))
             const newPapers = cloud.papers.filter(p => !existingPaperIds.has(p.id))
 
-            // Unique resources
             const existingResIds = new Set(state.resources.map(r => r.id))
             const newResources = cloud.resources.filter(r => !existingResIds.has(r.id))
 
@@ -67,6 +66,34 @@ export const useAppStore = create<AppState>()(
               isCloudLoaded: true,
             }
           })
+
+          // Live real-time postgres change listener
+          supabase
+            .channel('public:papers')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'papers' }, (payload) => {
+              const p: any = payload.new
+              if (p) {
+                const newPaper: Paper = {
+                  id: p.id,
+                  subject_id: p.subject_id,
+                  subject_name: p.subject_name || p.title || 'Subject Paper',
+                  branch_code: p.branch_code || 'CSE',
+                  exam_type: p.exam_type || 'midterm',
+                  exam_label: p.exam_label || 'Mid Term',
+                  academic_year: p.academic_year || '2025-26',
+                  semester_number: p.semester_number || 1,
+                  file_url: p.file_url,
+                  uploaded_by: p.uploaded_by || 'Anonymous',
+                  verification_status: 'verified',
+                  file_size: p.file_size ? Number(p.file_size) : undefined,
+                  sha256: p.sha256,
+                }
+                set((state) => ({
+                  papers: [newPaper, ...state.papers.filter(item => item.id !== newPaper.id)]
+                }))
+              }
+            })
+            .subscribe()
         } catch (err) {
           console.warn('Could not initialize Supabase cloud sync:', err)
         }

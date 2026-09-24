@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Analytics } from '@vercel/analytics/react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { getAnonId } from '@/lib/anonId'
+import { useAppStore } from '@/lib/store'
 
 // Lazy load all pages for optimal bundle splitting
 const HomePage         = lazy(() => import('@/pages/HomePage'))
@@ -54,9 +55,6 @@ function PageLoader() {
     </div>
   )
 }
-
-import { useEffect } from 'react'
-import { useAppStore } from '@/lib/store'
 
 export default function App() {
   const initCloudSync = useAppStore(state => state.initCloudSync)
