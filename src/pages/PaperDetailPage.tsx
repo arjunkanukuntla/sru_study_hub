@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
-import { useState } from 'react'
-import { ArrowLeft, Download, ExternalLink, Flag, Share2, FileText } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ArrowLeft, Download, ExternalLink, Flag, Share2, FileText, Maximize2, Minimize2, X } from 'lucide-react'
 import { EXAM_TYPES } from '@/data/catalog'
 import { formatBytes } from '@/lib/fileUtils'
 import { useAppStore } from '@/lib/store'
@@ -10,6 +10,18 @@ export default function PaperDetailPage() {
   const papers = useAppStore(state => state.papers)
   const paper = papers.find(p => p.id === id)
   const [reported, setReported] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(false)
+
+  // Escape key handler to exit fullscreen mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullScreen) {
+        setIsFullScreen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isFullScreen])
 
   if (!paper) {
     return (
@@ -34,8 +46,80 @@ export default function PaperDetailPage() {
     }
   }
 
+  const isImage = paper.file_url?.startsWith('data:image/') || paper.file_url?.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i)
+
   return (
     <div className="page-wrapper">
+      {/* Fullscreen Overlay Viewer */}
+      {isFullScreen && paper.file_url && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 9999,
+          background: '#090d16',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {/* Top Bar */}
+          <div style={{
+            height: '56px',
+            padding: '0 1.25rem',
+            background: '#131b2e',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            color: '#fff',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+              <FileText size={18} style={{ color: 'var(--color-primary-400)', flexShrink: 0 }} />
+              <span style={{ fontWeight: 700, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {paper.subject_name} — {paper.exam_label} ({paper.academic_year})
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+              <a href={paper.file_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ gap: '0.35rem' }}>
+                <ExternalLink size={13} /> Open Original
+              </a>
+              <a href={paper.file_url} download className="btn btn-secondary btn-sm" style={{ gap: '0.35rem' }}>
+                <Download size={13} /> Download
+              </a>
+              <button
+                className="btn btn-primary btn-sm"
+                style={{ gap: '0.35rem', marginLeft: '0.5rem' }}
+                onClick={() => setIsFullScreen(false)}
+              >
+                <Minimize2 size={14} /> Exit Fullscreen (Esc)
+              </button>
+            </div>
+          </div>
+
+          {/* Viewport */}
+          <div style={{ flex: 1, width: '100%', height: 'calc(100vh - 56px)', overflow: 'hidden', background: '#000' }}>
+            {isImage ? (
+              <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem' }}>
+                <img
+                  src={paper.file_url}
+                  alt={paper.subject_name}
+                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                />
+              </div>
+            ) : (
+              <iframe
+                src={paper.file_url}
+                title={`${paper.subject_name} Fullscreen`}
+                style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Back */}
       <Link to="/papers" className="btn btn-ghost btn-sm" style={{ marginBottom: '1rem', paddingLeft: 0 }}>
         <ArrowLeft size={15} /> All Papers
@@ -54,17 +138,29 @@ export default function PaperDetailPage() {
           <div style={{
             padding: '0.75rem 1rem',
             borderBottom: '1px solid var(--border-base)',
-            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
             background: 'var(--bg-muted)',
           }}>
-            <FileText size={15} style={{ color: 'var(--text-muted)' }} />
-            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {paper.subject_name} — {paper.exam_label}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+              <FileText size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {paper.subject_name} — {paper.exam_label}
+              </span>
+            </div>
+
+            {paper.file_url && (
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: '0.75rem', gap: '0.35rem', padding: '0.25rem 0.5rem' }}
+                onClick={() => setIsFullScreen(true)}
+              >
+                <Maximize2 size={13} /> Full Screen
+              </button>
+            )}
           </div>
 
           {paper.file_url ? (
-            paper.file_url.startsWith('data:image/') || paper.file_url.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) ? (
+            isImage ? (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem', background: 'var(--bg-base)', minHeight: 400 }}>
                 <img
                   src={paper.file_url}
@@ -125,7 +221,10 @@ export default function PaperDetailPage() {
           <div className="card" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {paper.file_url ? (
               <>
-                <a href={paper.file_url} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ justifyContent: 'center' }}>
+                <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={() => setIsFullScreen(true)}>
+                  <Maximize2 size={14} /> Full Screen View
+                </button>
+                <a href={paper.file_url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ justifyContent: 'center' }}>
                   <ExternalLink size={14} /> Open in Browser
                 </a>
                 <a href={paper.file_url} download className="btn btn-secondary" style={{ justifyContent: 'center' }}>
