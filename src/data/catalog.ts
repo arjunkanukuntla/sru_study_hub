@@ -45,7 +45,7 @@ export type Paper = {
   subject_id: string
   subject_name: string
   branch_code: string
-  exam_type: 'midterm' | 'endterm' | 'lab_mid' | 'lab_end' | 'supplementary'
+  exam_type: 'midterm' | 'mid1' | 'mid2' | 'endterm' | 'lab_mid' | 'lab_end' | 'supplementary' | string
   exam_label: string
   academic_year: string
   semester_number: number

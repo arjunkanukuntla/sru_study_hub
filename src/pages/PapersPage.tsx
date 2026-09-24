@@ -23,7 +23,10 @@ export default function PapersPage() {
   const filtered = useMemo(() => {
     return papers.filter(p => {
       if (branchFilter && p.branch_code.toLowerCase() !== branchFilter.toLowerCase()) return false
-      if (typeFilter && p.exam_type !== typeFilter) return false
+      if (typeFilter) {
+        if (typeFilter === 'midterm' && p.exam_type !== 'midterm' && p.exam_type !== 'mid1' && p.exam_type !== 'mid2') return false
+        else if (typeFilter !== 'midterm' && p.exam_type !== typeFilter) return false
+      }
       if (yearFilter && p.academic_year !== yearFilter) return false
       return true
     })
