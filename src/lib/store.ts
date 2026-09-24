@@ -6,6 +6,12 @@ import {
   INITIAL_UNITS, INITIAL_TOPICS, INITIAL_LAB_EXPERIMENTS,
   INITIAL_VIVA_QUESTIONS
 } from '@/data/catalog'
+import {
+  fetchCloudData,
+  syncPaperToCloud,
+  syncResourceToCloud,
+  syncSubjectToCloud,
+} from './supabaseSync'
 
 interface AppState {
   subjects: Subject[]
@@ -15,8 +21,10 @@ interface AppState {
   topics: Topic[]
   labExperiments: LabExperiment[]
   vivaQuestions: VivaQuestion[]
+  isCloudLoaded: boolean
 
   // Actions
+  initCloudSync: () => Promise<void>
   addPaper: (paper: Omit<Paper, 'id'> & { id?: string }) => Paper
   addResource: (resource: Omit<Resource, 'id'> & { id?: string }) => Resource
   addSubject: (subject: Omit<Subject, 'id'> & { id?: string }) => Subject
@@ -33,6 +41,36 @@ export const useAppStore = create<AppState>()(
       topics: INITIAL_TOPICS,
       labExperiments: INITIAL_LAB_EXPERIMENTS,
       vivaQuestions: INITIAL_VIVA_QUESTIONS,
+      isCloudLoaded: false,
+
+      initCloudSync: async () => {
+        try {
+          const cloud = await fetchCloudData()
+
+          set((state) => {
+            // Unique subjects
+            const existingSubIds = new Set(state.subjects.map(s => s.id))
+            const newSubjects = cloud.subjects.filter(s => !existingSubIds.has(s.id))
+
+            // Unique papers
+            const existingPaperIds = new Set(state.papers.map(p => p.id))
+            const newPapers = cloud.papers.filter(p => !existingPaperIds.has(p.id))
+
+            // Unique resources
+            const existingResIds = new Set(state.resources.map(r => r.id))
+            const newResources = cloud.resources.filter(r => !existingResIds.has(r.id))
+
+            return {
+              subjects: [...state.subjects, ...newSubjects],
+              papers: [...newPapers, ...state.papers],
+              resources: [...newResources, ...state.resources],
+              isCloudLoaded: true,
+            }
+          })
+        } catch (err) {
+          console.warn('Could not initialize Supabase cloud sync:', err)
+        }
+      },
 
       addPaper: (paperData) => {
         const id = paperData.id || `paper-${Date.now()}`
@@ -42,8 +80,10 @@ export const useAppStore = create<AppState>()(
           verification_status: 'verified',
         }
         set((state) => ({
-          papers: [newPaper, ...state.papers],
+          papers: [newPaper, ...state.papers.filter(p => p.id !== id)],
         }))
+        // Sync directly to Supabase cloud
+        syncPaperToCloud(newPaper)
         return newPaper
       },
 
@@ -55,8 +95,10 @@ export const useAppStore = create<AppState>()(
           verification_status: 'verified',
         }
         set((state) => ({
-          resources: [newResource, ...state.resources],
+          resources: [newResource, ...state.resources.filter(r => r.id !== id)],
         }))
+        // Sync directly to Supabase cloud
+        syncResourceToCloud(newResource)
         return newResource
       },
 
@@ -67,8 +109,10 @@ export const useAppStore = create<AppState>()(
           id,
         }
         set((state) => ({
-          subjects: [...state.subjects, newSubject],
+          subjects: [...state.subjects.filter(s => s.id !== id), newSubject],
         }))
+        // Sync directly to Supabase cloud
+        syncSubjectToCloud(newSubject)
         return newSubject
       },
 
@@ -91,11 +135,14 @@ export const useAppStore = create<AppState>()(
           units_count: 5,
         }
         set((state) => ({ subjects: [...state.subjects, newSub] }))
+        // Sync directly to Supabase cloud
+        syncSubjectToCloud(newSub)
         return newSub
       },
     }),
     {
-      name: 'sru_study_hub_v500',
+      name: 'sru_study_hub_v600',
     }
   )
 )
+

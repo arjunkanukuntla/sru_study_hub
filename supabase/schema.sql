@@ -40,70 +40,77 @@ create table if not exists academic_years (
 );
 
 create table if not exists subjects (
-  id            uuid primary key default gen_random_uuid(),
+  id            text primary key default gen_random_uuid()::text,
   name          text not null,
-  code          text not null unique,
-  branch_id     uuid references branches(id),
-  semester_num  int  not null,
-  credits       int  not null default 4,
-  subject_type  text not null default 'theory' check (subject_type in ('theory', 'lab', 'both')),
-  units_count   int  not null default 5,
+  code          text not null,
+  branch_id     text,
+  semester_id   text default 'sem1',
+  semester_num  int default 1,
+  credits       int not null default 4,
+  subject_type  text not null default 'theory',
+  type          text default 'theory',
+  units_count   int not null default 5,
   is_demo       boolean default false,
   created_at    timestamptz default now()
 );
 create index if not exists idx_subjects_branch on subjects(branch_id);
 
 create table if not exists units (
-  id          uuid primary key default gen_random_uuid(),
-  subject_id  uuid not null references subjects(id) on delete cascade,
-  unit_number int  not null,
+  id          text primary key default gen_random_uuid()::text,
+  subject_id  text not null,
+  unit_number int not null,
   title       text not null,
   description text,
-  created_at  timestamptz default now(),
-  unique (subject_id, unit_number)
+  created_at  timestamptz default now()
 );
 
 create table if not exists topics (
-  id          uuid primary key default gen_random_uuid(),
-  subject_id  uuid not null references subjects(id) on delete cascade,
-  unit_id     uuid references units(id),
+  id          text primary key default gen_random_uuid()::text,
+  subject_id  text not null,
+  unit_id     text,
   name        text not null,
   created_at  timestamptz default now()
 );
 create index if not exists idx_topics_subject on topics(subject_id);
 
 -- ── File Storage ──
--- Separates file binary info from resource metadata
--- Allows multiple uploads to reference the same physical file (deduplication)
 create table if not exists files (
-  id                uuid primary key default gen_random_uuid(),
+  id                text primary key default gen_random_uuid()::text,
   original_filename text not null,
   stored_filename   text not null,
   mime_type         text not null,
   original_size     bigint,
   optimized_size    bigint,
-  sha256            text not null unique,     -- SHA-256 for exact dedup
+  sha256            text,
   page_count        int,
-  storage_bucket    text not null,
-  storage_path      text not null,
-  quality_score     int default 50,          -- 0-100 quality score
+  storage_bucket    text,
+  storage_path      text,
+  quality_score     int default 50,
   created_at        timestamptz default now()
 );
 create index if not exists idx_files_sha256 on files(sha256);
 
 -- ── Papers ──
 create table if not exists papers (
-  id                  uuid primary key default gen_random_uuid(),
-  subject_id          uuid not null references subjects(id),
-  file_id             uuid references files(id),
-  exam_type           text not null check (exam_type in ('mid1','mid2','endterm','lab_mid','lab_end','supplementary')),
+  id                  text primary key default gen_random_uuid()::text,
+  subject_id          text not null,
+  subject_name        text,
+  branch_code         text,
+  file_id             text,
+  file_url            text,
+  exam_type           text not null,
   exam_label          text,
-  academic_year_id    uuid references academic_years(id),
+  academic_year       text,
+  academic_year_id    text,
+  semester_number     int default 1,
   exam_date           date,
   title               text,
-  verification_status text not null default 'verified' check (verification_status in ('pending','verified','rejected')),
-  verified_by         uuid references profiles(id),
+  uploaded_by         text,
+  verification_status text not null default 'verified',
+  verified_by         text,
   verified_at         timestamptz default now(),
+  file_size           bigint,
+  sha256              text,
   is_demo             boolean default false,
   contributor_count   int default 1,
   created_at          timestamptz default now()
@@ -113,14 +120,21 @@ create index if not exists idx_papers_status  on papers(verification_status);
 
 -- ── Resources ──
 create table if not exists resources (
-  id                  uuid primary key default gen_random_uuid(),
-  subject_id          uuid not null references subjects(id),
-  file_id             uuid references files(id),
-  resource_type       text not null check (resource_type in ('syllabus','notes','question_bank','reference','lab_manual','other')),
+  id                  text primary key default gen_random_uuid()::text,
+  subject_id          text not null,
+  subject_name        text,
+  branch_code         text,
+  file_id             text,
+  file_url            text,
+  resource_type       text,
+  type                text,
   title               text not null,
   description         text,
-  academic_year_id    uuid references academic_years(id),
-  verification_status text not null default 'verified' check (verification_status in ('pending','verified','rejected')),
+  academic_year       text,
+  academic_year_id    text,
+  uploaded_by         text,
+  verification_status text not null default 'verified',
+  sha256              text,
   is_demo             boolean default false,
   created_at          timestamptz default now()
 );

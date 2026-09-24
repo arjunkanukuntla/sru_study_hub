@@ -54,7 +54,16 @@ function PageLoader() {
   )
 }
 
+import { useEffect } from 'react'
+import { useAppStore } from '@/lib/store'
+
 export default function App() {
+  const initCloudSync = useAppStore(state => state.initCloudSync)
+
+  useEffect(() => {
+    initCloudSync()
+  }, [initCloudSync])
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
