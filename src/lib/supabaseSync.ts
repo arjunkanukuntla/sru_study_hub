@@ -1,12 +1,6 @@
 import { supabase } from './supabase'
 import type { Subject, Paper, Resource } from '@/data/catalog'
 
-function toUuid(id: string): string {
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    return id
-  }
-  return crypto.randomUUID()
-}
 
 function mapExamType(type: string): string {
   if (type === 'midterm' || type === 'mid1') return 'mid1'
@@ -131,9 +125,10 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
     throw new Error('syncPaperToCloud: file_url must be a permanent CDN URL, not a DataURL. Upload to Storage first.')
   }
 
+  // Use original string IDs — papers/subjects tables use TEXT primary keys, not UUID
   const row = {
-    id: toUuid(paper.id),
-    subject_id: toUuid(paper.subject_id),
+    id: paper.id,
+    subject_id: paper.subject_id,
     subject_name: paper.subject_name,
     branch_code: paper.branch_code,
     exam_type: mapExamType(paper.exam_type),
@@ -164,9 +159,10 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
     throw new Error('syncResourceToCloud: file_url must be a permanent CDN URL. Upload to Storage first.')
   }
 
+  // Use original string IDs — resources/subjects tables use TEXT primary keys, not UUID
   const row = {
-    id: toUuid(resource.id),
-    subject_id: toUuid(resource.subject_id),
+    id: resource.id,
+    subject_id: resource.subject_id,
     subject_name: resource.subject_name,
     branch_code: resource.branch_code,
     type: resource.type,
@@ -191,8 +187,9 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
  */
 export async function syncSubjectToCloud(subject: Subject): Promise<void> {
   try {
+    // Use original string ID — subjects table uses TEXT primary key
     const row = {
-      id: toUuid(subject.id),
+      id: subject.id,
       name: subject.name,
       code: subject.code,
       branch_id: subject.branch_id,
