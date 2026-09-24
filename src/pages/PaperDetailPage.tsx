@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Download, ExternalLink, Flag, Share2, FileText, Maximize2, Minimize2, X } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { ArrowLeft, Download, ExternalLink, Flag, Share2, FileText, Maximize2, Minimize2 } from 'lucide-react'
 import { EXAM_TYPES } from '@/data/catalog'
 import { formatBytes } from '@/lib/fileUtils'
 import { useAppStore } from '@/lib/store'
@@ -12,15 +13,38 @@ export default function PaperDetailPage() {
   const [reported, setReported] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false)
 
-  // Escape key handler to exit fullscreen mode
+  const toggleFullScreen = () => {
+    if (!isFullScreen) {
+      setIsFullScreen(true)
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {})
+      }
+    } else {
+      setIsFullScreen(false)
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {})
+      }
+    }
+  }
+
+  // Listen to browser native fullscreen change and Esc key
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isFullScreen) {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
         setIsFullScreen(false)
       }
     }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullScreen) {
+        toggleFullScreen()
+      }
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
   }, [isFullScreen])
 
   if (!paper) {
@@ -50,16 +74,18 @@ export default function PaperDetailPage() {
 
   return (
     <div className="page-wrapper">
-      {/* Fullscreen Overlay Viewer */}
-      {isFullScreen && paper.file_url && (
+      {/* Fullscreen Overlay via React Portal directly on document.body */}
+      {isFullScreen && paper.file_url && createPortal(
         <div style={{
           position: 'fixed',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          zIndex: 9999,
-          background: '#090d16',
+          width: '100vw',
+          height: '100vh',
+          zIndex: 999999,
+          background: '#080c14',
           display: 'flex',
           flexDirection: 'column',
         }}>
@@ -67,13 +93,14 @@ export default function PaperDetailPage() {
           <div style={{
             height: '56px',
             padding: '0 1.25rem',
-            background: '#131b2e',
+            background: '#0f172a',
             borderBottom: '1px solid rgba(255,255,255,0.1)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: '1rem',
             color: '#fff',
+            flexShrink: 0,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
               <FileText size={18} style={{ color: 'var(--color-primary-400)', flexShrink: 0 }} />
@@ -92,7 +119,7 @@ export default function PaperDetailPage() {
               <button
                 className="btn btn-primary btn-sm"
                 style={{ gap: '0.35rem', marginLeft: '0.5rem' }}
-                onClick={() => setIsFullScreen(false)}
+                onClick={toggleFullScreen}
               >
                 <Minimize2 size={14} /> Exit Fullscreen (Esc)
               </button>
@@ -100,7 +127,7 @@ export default function PaperDetailPage() {
           </div>
 
           {/* Viewport */}
-          <div style={{ flex: 1, width: '100%', height: 'calc(100vh - 56px)', overflow: 'hidden', background: '#000' }}>
+          <div style={{ flex: 1, width: '100vw', height: 'calc(100vh - 56px)', overflow: 'hidden', background: '#000' }}>
             {isImage ? (
               <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem' }}>
                 <img
@@ -113,11 +140,12 @@ export default function PaperDetailPage() {
               <iframe
                 src={paper.file_url}
                 title={`${paper.subject_name} Fullscreen`}
-                style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                style={{ width: '100vw', height: '100%', border: 'none', display: 'block' }}
               />
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Back */}
@@ -152,7 +180,7 @@ export default function PaperDetailPage() {
               <button
                 className="btn btn-ghost btn-sm"
                 style={{ fontSize: '0.75rem', gap: '0.35rem', padding: '0.25rem 0.5rem' }}
-                onClick={() => setIsFullScreen(true)}
+                onClick={toggleFullScreen}
               >
                 <Maximize2 size={13} /> Full Screen
               </button>
@@ -221,7 +249,7 @@ export default function PaperDetailPage() {
           <div className="card" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {paper.file_url ? (
               <>
-                <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={() => setIsFullScreen(true)}>
+                <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={toggleFullScreen}>
                   <Maximize2 size={14} /> Full Screen View
                 </button>
                 <a href={paper.file_url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ justifyContent: 'center' }}>
