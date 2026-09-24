@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Upload, CheckCircle, AlertCircle, Loader, X } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { Upload, CheckCircle, AlertCircle, Loader, X, CloudUpload } from 'lucide-react'
 import {
   validateFile, validateContentSafety, sha256, checkUploadRateLimit, incrementUploadCount,
   formatBytes, optimizeUploadFile, ALLOWED_MIMES
@@ -7,6 +7,7 @@ import {
 import { getAnonId } from '@/lib/anonId'
 import { BRANCHES, ACADEMIC_YEARS, EXAM_TYPES } from '@/data/catalog'
 import { useAppStore } from '@/lib/store'
+import { uploadFileToStorage } from '@/lib/supabaseSync'
 
 const MATERIAL_TYPES = [
   { value: 'paper', label: '📄 Previous Paper', desc: 'Mid-term or end-term question paper' },
@@ -23,10 +24,11 @@ type UploadStep = { id: string; label: string; status: 'pending' | 'active' | 'd
 const INITIAL_STEPS: UploadStep[] = [
   { id: 'validate', label: 'Validating file & content safety', status: 'pending' },
   { id: 'compress', label: 'Optimizing & compressing file', status: 'pending' },
-  { id: 'hash', label: 'Calculating file hash', status: 'pending' },
+  { id: 'hash', label: 'Calculating file hash (SHA-256)', status: 'pending' },
   { id: 'duplicate', label: 'Checking for duplicates', status: 'pending' },
-  { id: 'upload', label: 'Uploading file', status: 'pending' },
-  { id: 'meta', label: 'Publishing & verifying resource', status: 'pending' },
+  { id: 'upload', label: 'Uploading to Supabase Storage (CDN)', status: 'pending' },
+  { id: 'meta', label: 'Saving metadata to database', status: 'pending' },
+  { id: 'publish', label: 'Publishing & broadcasting to all users', status: 'pending' },
 ]
 
 export default function UploadPage() {
@@ -44,6 +46,7 @@ export default function UploadPage() {
   const [steps, setSteps] = useState<UploadStep[]>(INITIAL_STEPS)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [uploadedUrl, setUploadedUrl] = useState('')
 
   const rateLimit = checkUploadRateLimit()
 
@@ -63,7 +66,6 @@ export default function UploadPage() {
     }
     setFile(f)
     setError('')
-    // Auto-fill title from filename
     if (!title) {
       setTitle(f.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '))
     }
@@ -94,9 +96,10 @@ export default function UploadPage() {
     setUploading(true)
     setError('')
     setSteps(INITIAL_STEPS)
+    setUploadedUrl('')
 
     try {
-      // Step 1: Validate file & content safety
+      // ── Step 1: Validate ──────────────────────────────────────────────────
       updateStep('validate', 'active')
       const validation = validateFile(file)
       if (!validation.valid) throw new Error(validation.error)
@@ -104,10 +107,10 @@ export default function UploadPage() {
       const safetyCheck = validateContentSafety(title, description, file.name)
       if (!safetyCheck.safe) throw new Error(safetyCheck.error)
 
-      await new Promise(r => setTimeout(r, 200))
-      updateStep('validate', 'done', `${formatBytes(file.size)} · Content validated`)
+      await new Promise(r => setTimeout(r, 150))
+      updateStep('validate', 'done', `${formatBytes(file.size)} · Content validated ✓`)
 
-      // Step 2: Auto-Compress & Optimize File client-side (Images, PDFs, Word Docs)
+      // ── Step 2: Compress ──────────────────────────────────────────────────
       updateStep('compress', 'active')
       const compression = await optimizeUploadFile(file)
       const uploadFile = compression.optimizedFile
@@ -115,49 +118,51 @@ export default function UploadPage() {
         const savedPct = Math.round((1 - compression.optimizedSize / compression.originalSize) * 100)
         updateStep('compress', 'done', `${compression.fileTypeLabel}: ${formatBytes(compression.originalSize)} → ${formatBytes(compression.optimizedSize)} (${savedPct}% saved)`)
       } else {
-        updateStep('compress', 'done', `Optimal size (${formatBytes(compression.originalSize)})`)
+        updateStep('compress', 'done', `Optimal size (${formatBytes(compression.optimizedSize)})`)
       }
 
-      // Step 3: Hash
+      // ── Step 3: Hash ──────────────────────────────────────────────────────
       updateStep('hash', 'active')
       const hash = await sha256(uploadFile)
-      updateStep('hash', 'done', `SHA-256: ${hash.slice(0, 16)}…`)
+      updateStep('hash', 'done', `${hash.slice(0, 20)}…`)
 
-      // Step 4: Hash check against store
+      // ── Step 4: Duplicate check ───────────────────────────────────────────
       updateStep('duplicate', 'active')
-      await new Promise(r => setTimeout(r, 150))
-      
+      await new Promise(r => setTimeout(r, 100))
       const existingPaper = papers.find(p => p.sha256 === hash)
       const existingResource = resources.find(r => r.sha256 === hash)
 
       if (existingPaper || existingResource) {
-        updateStep('duplicate', 'done', 'Exact file already exists in library')
-        updateStep('upload', 'done', 'Verified & Linked')
-        updateStep('meta', 'done', 'Available in SRU Study Hub')
+        updateStep('duplicate', 'done', 'Exact file already exists — no re-upload needed')
+        updateStep('upload', 'done', 'Deduplicated (using existing CDN link)')
+        updateStep('meta', 'done', 'Already published')
+        updateStep('publish', 'done', 'Already visible to all users ✓')
+        setUploadedUrl(existingPaper?.file_url || existingResource?.file_url || '')
         setSuccess(true)
         setUploading(false)
         return
       }
+      updateStep('duplicate', 'done', 'No duplicates found ✓')
 
-      updateStep('duplicate', 'done', 'No duplicates found')
-
-      // Step 5: Storage Upload
+      // ── Step 5: Upload to Supabase Storage (real CDN URL) ─────────────────
       updateStep('upload', 'active')
-      await new Promise(r => setTimeout(r, 200))
-      
-      const fileUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader()
-        reader.onloadend = () => resolve(reader.result as string)
-        reader.onerror = () => resolve(URL.createObjectURL(uploadFile))
-        reader.readAsDataURL(uploadFile)
-      })
+      const bucket = (materialType === 'paper' || materialType === 'lab_paper') ? 'papers' : 'resources'
 
-      localStorage.setItem(`sru_hash:${hash}`, JSON.stringify({ title, subject, uploadedBy: getAnonId(), verificationStatus: 'verified' }))
-      updateStep('upload', 'done', 'File stored successfully')
+      // Rename file to include hash prefix to aid CDN deduplication
+      const cdnFile = new File([uploadFile], `${hash.slice(0, 12)}_${uploadFile.name}`, { type: uploadFile.type })
 
-      // Step 5: Save & Publish to Reactive Store
+      let cdnUrl: string
+      try {
+        cdnUrl = await uploadFileToStorage(bucket, cdnFile)
+      } catch (storageErr) {
+        throw new Error(`Storage upload failed: ${storageErr instanceof Error ? storageErr.message : storageErr}. Check that your Supabase Storage buckets "papers" and "resources" are created and set to Public.`)
+      }
+      setUploadedUrl(cdnUrl)
+      updateStep('upload', 'done', `CDN URL secured ✓`)
+
+      // ── Step 6: Save metadata to database ────────────────────────────────
       updateStep('meta', 'active')
-      await new Promise(r => setTimeout(r, 200))
+      await new Promise(r => setTimeout(r, 100))
 
       const isLab = materialType === 'lab_paper' || materialType === 'lab_manual'
       const targetSubject = findOrCreateSubject(subject, branch, 'sem1', isLab ? 'lab' : 'theory')
@@ -172,10 +177,10 @@ export default function UploadPage() {
           exam_label: EXAM_TYPES[examType] || 'Mid Term',
           academic_year: academicYear,
           semester_number: parseInt(targetSubject.semester_id.replace('sem', '')) || 1,
-          file_url: fileUrl,
+          file_url: cdnUrl,          // ✅ Permanent Supabase CDN URL
           uploaded_by: getAnonId(),
           verification_status: 'verified',
-          file_size: file.size,
+          file_size: uploadFile.size,
           sha256: hash,
         })
       } else {
@@ -186,7 +191,7 @@ export default function UploadPage() {
           type: (materialType || 'notes') as any,
           title: title || `${targetSubject.name} ${materialType}`,
           description: description || 'Uploaded study resource',
-          file_url: fileUrl,
+          file_url: cdnUrl,          // ✅ Permanent Supabase CDN URL
           uploaded_by: getAnonId(),
           verification_status: 'verified',
           academic_year: academicYear,
@@ -194,8 +199,13 @@ export default function UploadPage() {
         })
       }
 
+      updateStep('meta', 'done', 'Record saved to Supabase DB ✓')
+
+      // ── Step 7: Publish ───────────────────────────────────────────────────
+      updateStep('publish', 'active')
+      await new Promise(r => setTimeout(r, 200))
       incrementUploadCount()
-      updateStep('meta', 'done', 'Approved & Published immediately')
+      updateStep('publish', 'done', 'Live & visible to ALL users instantly ✓')
 
       setSuccess(true)
     } catch (err) {
@@ -209,25 +219,52 @@ export default function UploadPage() {
 
   const handleReset = () => {
     setFile(null); setTitle(''); setDescription(''); setSuccess(false)
-    setSteps(INITIAL_STEPS); setError('')
+    setSteps(INITIAL_STEPS); setError(''); setUploadedUrl('')
   }
 
   if (success) {
     return (
       <div className="page-wrapper" style={{ maxWidth: 640, marginInline: 'auto' }}>
         <div className="card" style={{ padding: '2.5rem', textAlign: 'center' }}>
-          <CheckCircle size={56} style={{ color: 'var(--color-success-500)', margin: '0 auto 1rem' }} />
-          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Upload Live!</h1>
+          <div style={{
+            width: 72, height: 72, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 1.25rem',
+            boxShadow: '0 0 0 12px rgba(34,197,94,0.15)',
+          }}>
+            <CheckCircle size={36} color="white" />
+          </div>
+          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.375rem' }}>Upload Live!</h1>
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
-            Your material has been published immediately. It is now live for all SR University students.
-            Thank you for contributing!
+            Your file is now stored on <strong>Supabase CDN</strong> and immediately visible to
+            every SR University student — in any browser, on any device.
           </p>
-          <div className="alert alert-success" style={{ marginBottom: '1.5rem', textAlign: 'left' }}>
-            <div style={{ fontSize: '0.8125rem' }}>
-              <strong>🟢 Status: Live & Published</strong><br />
-              Your upload passed all content safety checks and is live on SRU Study Hub.
+
+          {uploadedUrl && (
+            <div className="alert alert-success" style={{ marginBottom: '1.25rem', textAlign: 'left', wordBreak: 'break-all' }}>
+              <div style={{ fontSize: '0.8125rem' }}>
+                <strong>🌐 Public CDN URL:</strong><br />
+                <a href={uploadedUrl} target="_blank" rel="noopener noreferrer"
+                   style={{ color: 'var(--color-primary-500)', fontSize: '0.75rem' }}>
+                  {uploadedUrl}
+                </a>
+              </div>
+            </div>
+          )}
+
+          <div className="alert" style={{
+            background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)',
+            marginBottom: '1.5rem', textAlign: 'left',
+          }}>
+            <div style={{ fontSize: '0.8125rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <div>✅ <strong>Uploaded to Supabase Storage</strong> — permanent CDN link</div>
+              <div>✅ <strong>Saved to Supabase Database</strong> — visible to all users</div>
+              <div>✅ <strong>Realtime broadcast</strong> — other open tabs get it instantly</div>
+              <div>✅ <strong>Zero duplicates</strong> — SHA-256 hash deduplication active</div>
             </div>
           </div>
+
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={handleReset}>Upload Another</button>
             {materialType === 'paper' || materialType === 'lab_paper' ? (
@@ -245,9 +282,13 @@ export default function UploadPage() {
   return (
     <div className="page-wrapper" style={{ maxWidth: 700, marginInline: 'auto' }}>
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>Upload Material</h1>
+        <h1 style={{ fontSize: '1.5rem', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <CloudUpload size={24} style={{ color: 'var(--color-primary-500)' }} />
+          Upload Material
+        </h1>
         <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-          No account required · Anonymous ID: <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', background: 'var(--bg-muted)', padding: '1px 5px', borderRadius: 4 }}>{getAnonId()}</code>
+          Files are uploaded to <strong>Supabase Cloud Storage</strong> — visible to all students instantly.
+          Anonymous ID: <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', background: 'var(--bg-muted)', padding: '1px 5px', borderRadius: 4 }}>{getAnonId()}</code>
         </p>
       </div>
 
@@ -411,7 +452,7 @@ export default function UploadPage() {
           <div className="card" style={{ padding: '1.25rem' }}>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} />
-              Processing upload…
+              Uploading to Supabase Cloud…
             </div>
             {steps.map(step => (
               <div key={step.id} className={`upload-step ${step.status}`}>
@@ -435,12 +476,11 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Submit */}
+        {/* Info */}
         <div className="alert alert-info" style={{ fontSize: '0.8rem' }}>
           <div>
-            📋 Uploads are published automatically using 100% deterministic local safety checks.
-            Duplicate files are automatically detected — no double storage.
-            Your anonymous ID (<code style={{ fontFamily: 'var(--font-mono)' }}>{getAnonId()}</code>) is used for contributor credit.
+            ☁️ Files are uploaded directly to <strong>Supabase Storage CDN</strong> — anyone can access them instantly.
+            Duplicates are skipped via SHA-256 hash. Your anonymous ID (<code style={{ fontFamily: 'var(--font-mono)' }}>{getAnonId()}</code>) is used for contributor credit.
           </div>
         </div>
 
@@ -450,9 +490,9 @@ export default function UploadPage() {
           disabled={uploading || !file || !rateLimit.allowed}
         >
           {uploading ? (
-            <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Processing…</>
+            <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Uploading to Cloud…</>
           ) : (
-            <><Upload size={16} /> Submit Upload</>
+            <><CloudUpload size={16} /> Upload to Cloud</>
           )}
         </button>
       </form>

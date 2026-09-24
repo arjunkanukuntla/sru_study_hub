@@ -283,10 +283,51 @@ create policy "Admin all resources"  on resources  for all using (auth.uid() in 
 create policy "Admin all uploads"    on uploads    for all using (auth.uid() in (select id from profiles where role = 'admin'));
 create policy "Admin analytics"      on analytics_cache for all using (auth.uid() in (select id from profiles where role = 'admin'));
 
--- ── Storage Buckets (create in Supabase dashboard) ──
--- Bucket: papers     (public: true)
--- Bucket: resources  (public: true)
--- Bucket: labs       (public: true)
+-- ── Storage Buckets ──
+-- Run these SQL statements to create the buckets and set them as public:
+-- (If you get "already exists" errors, the bucket is already created — skip those lines)
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values
+  ('papers',    'papers',    true, 52428800,  array['application/pdf','image/jpeg','image/png','image/webp','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
+  ('resources', 'resources', true, 52428800,  array['application/pdf','image/jpeg','image/png','image/webp','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
+  ('labs',      'labs',      true, 52428800,  array['application/pdf','image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit;
+
+-- Storage RLS: anyone can read public files
+create policy "Public read papers storage"
+  on storage.objects for select
+  using (bucket_id = 'papers');
+
+create policy "Public read resources storage"
+  on storage.objects for select
+  using (bucket_id = 'resources');
+
+create policy "Public read labs storage"
+  on storage.objects for select
+  using (bucket_id = 'labs');
+
+-- Storage RLS: anyone (including anonymous) can upload
+create policy "Anyone upload papers"
+  on storage.objects for insert
+  with check (bucket_id = 'papers');
+
+create policy "Anyone upload resources"
+  on storage.objects for insert
+  with check (bucket_id = 'resources');
+
+create policy "Anyone upload labs"
+  on storage.objects for insert
+  with check (bucket_id = 'labs');
+
+-- Storage RLS: anyone can update (upsert)
+create policy "Anyone update papers"
+  on storage.objects for update
+  using (bucket_id = 'papers');
+
+create policy "Anyone update resources"
+  on storage.objects for update
+  using (bucket_id = 'resources');
 
 -- ── Initial Data ──
 -- Academic years

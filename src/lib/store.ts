@@ -11,6 +11,8 @@ import {
   syncPaperToCloud,
   syncResourceToCloud,
   syncSubjectToCloud,
+  mapPaperRow,
+  mapResourceRow,
 } from './supabaseSync'
 
 import { supabase } from './supabase'
@@ -33,6 +35,8 @@ interface AppState {
   findOrCreateSubject: (name: string, branchId: string, semesterId?: string, type?: 'theory' | 'lab' | 'both') => Subject
 }
 
+let realtimeSubscribed = false
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -47,53 +51,121 @@ export const useAppStore = create<AppState>()(
 
       initCloudSync: async () => {
         try {
+          // ── 1. Full authoritative fetch from Supabase ──────────────────────
           const cloud = await fetchCloudData()
+          console.log(`☁️ Cloud sync: ${cloud.papers.length} papers, ${cloud.resources.length} resources, ${cloud.subjects.length} subjects`)
 
           set((state) => {
-            const existingSubIds = new Set(state.subjects.map(s => s.id))
-            const newSubjects = cloud.subjects.filter(s => !existingSubIds.has(s.id))
+            // Subjects: merge cloud into initial, cloud wins on conflict
+            const builtInSubIds = new Set(INITIAL_SUBJECTS.map(s => s.id))
+            const cloudSubIds = new Set(cloud.subjects.map(s => s.id))
+            const builtInsNotInCloud = state.subjects.filter(s => builtInSubIds.has(s.id) && !cloudSubIds.has(s.id))
 
-            const existingPaperIds = new Set(state.papers.map(p => p.id))
-            const newPapers = cloud.papers.filter(p => !existingPaperIds.has(p.id))
+            // Papers: use ONLY cloud papers with real CDN URLs; keep local papers that have real URLs too
+            const cloudPaperIds = new Set(cloud.papers.map(p => p.id))
+            const localRealPapers = state.papers.filter(
+              p => !cloudPaperIds.has(p.id) && p.file_url && !p.file_url.startsWith('data:')
+            )
 
-            const existingResIds = new Set(state.resources.map(r => r.id))
-            const newResources = cloud.resources.filter(r => !existingResIds.has(r.id))
+            // Resources: same strategy
+            const cloudResIds = new Set(cloud.resources.map(r => r.id))
+            const localRealResources = state.resources.filter(
+              r => !cloudResIds.has(r.id) && r.file_url && !r.file_url.startsWith('data:')
+            )
 
             return {
-              subjects: [...state.subjects, ...newSubjects],
-              papers: [...newPapers, ...state.papers],
-              resources: [...newResources, ...state.resources],
+              subjects: [...builtInsNotInCloud, ...cloud.subjects],
+              papers: [...cloud.papers, ...localRealPapers],
+              resources: [...cloud.resources, ...localRealResources],
               isCloudLoaded: true,
             }
           })
 
-          // Live real-time postgres change listener
+          // ── 2. Realtime listeners (subscribe once) ─────────────────────────
+          if (realtimeSubscribed) return
+          realtimeSubscribed = true
+
+          // Papers
           supabase
-            .channel('public:papers')
+            .channel('realtime:papers')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'papers' }, (payload) => {
               const p: any = payload.new
-              if (p) {
-                const newPaper: Paper = {
-                  id: p.id,
-                  subject_id: p.subject_id,
-                  subject_name: p.subject_name || p.title || 'Subject Paper',
-                  branch_code: p.branch_code || 'CSE',
-                  exam_type: p.exam_type || 'midterm',
-                  exam_label: p.exam_label || 'Mid Term',
-                  academic_year: p.academic_year || '2025-26',
-                  semester_number: p.semester_number || 1,
-                  file_url: p.file_url,
-                  uploaded_by: p.uploaded_by || 'Anonymous',
-                  verification_status: 'verified',
-                  file_size: p.file_size ? Number(p.file_size) : undefined,
-                  sha256: p.sha256,
-                }
-                set((state) => ({
-                  papers: [newPaper, ...state.papers.filter(item => item.id !== newPaper.id)]
-                }))
-              }
+              if (!p || !p.file_url || p.file_url.startsWith('data:')) return
+              const newPaper = mapPaperRow(p)
+              console.log('🔔 Realtime: new paper', newPaper.id)
+              set((state) => ({
+                papers: [newPaper, ...state.papers.filter(item => item.id !== newPaper.id)]
+              }))
             })
-            .subscribe()
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'papers' }, (payload) => {
+              const p: any = payload.new
+              if (!p || !p.file_url || p.file_url.startsWith('data:')) return
+              const updated = mapPaperRow(p)
+              set((state) => ({
+                papers: state.papers.map(item => item.id === updated.id ? updated : item)
+              }))
+            })
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'papers' }, (payload) => {
+              const id = payload.old?.id
+              if (id) set((state) => ({ papers: state.papers.filter(item => item.id !== id) }))
+            })
+            .subscribe((status) => {
+              console.log('📡 Realtime papers channel:', status)
+            })
+
+          // Resources
+          supabase
+            .channel('realtime:resources')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'resources' }, (payload) => {
+              const r: any = payload.new
+              if (!r || !r.file_url || r.file_url.startsWith('data:')) return
+              const newResource = mapResourceRow(r)
+              console.log('🔔 Realtime: new resource', newResource.id)
+              set((state) => ({
+                resources: [newResource, ...state.resources.filter(item => item.id !== newResource.id)]
+              }))
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'resources' }, (payload) => {
+              const r: any = payload.new
+              if (!r || !r.file_url || r.file_url.startsWith('data:')) return
+              const updated = mapResourceRow(r)
+              set((state) => ({
+                resources: state.resources.map(item => item.id === updated.id ? updated : item)
+              }))
+            })
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'resources' }, (payload) => {
+              const id = payload.old?.id
+              if (id) set((state) => ({ resources: state.resources.filter(item => item.id !== id) }))
+            })
+            .subscribe((status) => {
+              console.log('📡 Realtime resources channel:', status)
+            })
+
+          // Subjects
+          supabase
+            .channel('realtime:subjects')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'subjects' }, (payload) => {
+              const s: any = payload.new
+              if (!s) return
+              const newSub: Subject = {
+                id: s.id,
+                name: s.name,
+                code: s.code || 'SUB101',
+                branch_id: s.branch_id || 'cse',
+                semester_id: s.semester_id || 'sem1',
+                credits: s.credits || 3,
+                type: s.type || s.subject_type || 'theory',
+                units_count: s.units_count || 5,
+              }
+              console.log('🔔 Realtime: new subject', newSub.id)
+              set((state) => ({
+                subjects: [...state.subjects.filter(item => item.id !== newSub.id), newSub]
+              }))
+            })
+            .subscribe((status) => {
+              console.log('📡 Realtime subjects channel:', status)
+            })
+
         } catch (err) {
           console.warn('Could not initialize Supabase cloud sync:', err)
         }
@@ -109,8 +181,10 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           papers: [newPaper, ...state.papers.filter(p => p.id !== id)],
         }))
-        // Sync directly to Supabase cloud
-        syncPaperToCloud(newPaper)
+        // Only sync if we have a real URL (storage upload already done in UploadPage)
+        if (newPaper.file_url && !newPaper.file_url.startsWith('data:')) {
+          syncPaperToCloud(newPaper)
+        }
         return newPaper
       },
 
@@ -124,8 +198,10 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           resources: [newResource, ...state.resources.filter(r => r.id !== id)],
         }))
-        // Sync directly to Supabase cloud
-        syncResourceToCloud(newResource)
+        // Only sync if we have a real URL
+        if (newResource.file_url && !newResource.file_url.startsWith('data:')) {
+          syncResourceToCloud(newResource)
+        }
         return newResource
       },
 
@@ -138,7 +214,6 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           subjects: [...state.subjects.filter(s => s.id !== id), newSubject],
         }))
-        // Sync directly to Supabase cloud
         syncSubjectToCloud(newSubject)
         return newSubject
       },
@@ -162,14 +237,24 @@ export const useAppStore = create<AppState>()(
           units_count: 5,
         }
         set((state) => ({ subjects: [...state.subjects, newSub] }))
-        // Sync directly to Supabase cloud
         syncSubjectToCloud(newSub)
         return newSub
       },
     }),
     {
-      name: 'sru_study_hub_v600',
+      name: 'sru_study_hub_v700',
+      // Only persist lightweight data — no file_url blobs
+      partialize: (state) => ({
+        subjects: state.subjects,
+        // Only keep papers/resources with real CDN URLs in localStorage
+        papers: state.papers.filter(p => p.file_url && !p.file_url.startsWith('data:')),
+        resources: state.resources.filter(r => r.file_url && !r.file_url.startsWith('data:')),
+        units: state.units,
+        topics: state.topics,
+        labExperiments: state.labExperiments,
+        vivaQuestions: state.vivaQuestions,
+        isCloudLoaded: false, // always refetch on reload
+      }),
     }
   )
 )
-

@@ -28,10 +28,14 @@ export async function fetchCloudData(): Promise<{
 }> {
   try {
     const [subRes, paperRes, resRes] = await Promise.all([
-      supabase.from('subjects').select('*'),
-      supabase.from('papers').select('*'),
-      supabase.from('resources').select('*'),
+      supabase.from('subjects').select('*').order('created_at', { ascending: false }),
+      supabase.from('papers').select('*').order('created_at', { ascending: false }),
+      supabase.from('resources').select('*').order('created_at', { ascending: false }),
     ])
+
+    if (subRes.error) console.warn('Subjects fetch error:', subRes.error.message)
+    if (paperRes.error) console.warn('Papers fetch error:', paperRes.error.message)
+    if (resRes.error) console.warn('Resources fetch error:', resRes.error.message)
 
     const subjects: Subject[] = (subRes.data || []).map((s: any) => ({
       id: s.id,
@@ -44,36 +48,40 @@ export async function fetchCloudData(): Promise<{
       units_count: s.units_count || 5,
     }))
 
-    const papers: Paper[] = (paperRes.data || []).map((p: any) => ({
-      id: p.id,
-      subject_id: p.subject_id,
-      subject_name: p.subject_name || p.title || 'Subject Paper',
-      branch_code: p.branch_code || 'CSE',
-      exam_type: p.exam_type || 'midterm',
-      exam_label: p.exam_label || 'Mid Term',
-      academic_year: p.academic_year || '2025-26',
-      semester_number: p.semester_number || 1,
-      file_url: p.file_url,
-      uploaded_by: p.uploaded_by || 'Anonymous',
-      verification_status: p.verification_status || 'verified',
-      file_size: p.file_size ? Number(p.file_size) : undefined,
-      sha256: p.sha256,
-    }))
+    const papers: Paper[] = (paperRes.data || [])
+      .filter((p: any) => p.file_url && !p.file_url.startsWith('data:'))
+      .map((p: any) => ({
+        id: p.id,
+        subject_id: p.subject_id,
+        subject_name: p.subject_name || p.title || 'Subject Paper',
+        branch_code: p.branch_code || 'CSE',
+        exam_type: p.exam_type || 'midterm',
+        exam_label: p.exam_label || 'Mid Term',
+        academic_year: p.academic_year || '2025-26',
+        semester_number: p.semester_number || 1,
+        file_url: p.file_url,
+        uploaded_by: p.uploaded_by || 'Anonymous',
+        verification_status: p.verification_status || 'verified',
+        file_size: p.file_size ? Number(p.file_size) : undefined,
+        sha256: p.sha256,
+      }))
 
-    const resources: Resource[] = (resRes.data || []).map((r: any) => ({
-      id: r.id,
-      subject_id: r.subject_id,
-      subject_name: r.subject_name || 'Subject Resource',
-      branch_code: r.branch_code || 'CSE',
-      type: r.type || r.resource_type || 'notes',
-      title: r.title,
-      description: r.description || '',
-      file_url: r.file_url,
-      uploaded_by: r.uploaded_by || 'Anonymous',
-      verification_status: r.verification_status || 'verified',
-      academic_year: r.academic_year || '2025-26',
-      sha256: r.sha256,
-    }))
+    const resources: Resource[] = (resRes.data || [])
+      .filter((r: any) => r.file_url && !r.file_url.startsWith('data:'))
+      .map((r: any) => ({
+        id: r.id,
+        subject_id: r.subject_id,
+        subject_name: r.subject_name || 'Subject Resource',
+        branch_code: r.branch_code || 'CSE',
+        type: r.type || r.resource_type || 'notes',
+        title: r.title,
+        description: r.description || '',
+        file_url: r.file_url,
+        uploaded_by: r.uploaded_by || 'Anonymous',
+        verification_status: r.verification_status || 'verified',
+        academic_year: r.academic_year || '2025-26',
+        sha256: r.sha256,
+      }))
 
     return { subjects, papers, resources }
   } catch (err) {
@@ -83,67 +91,45 @@ export async function fetchCloudData(): Promise<{
 }
 
 /**
- * Upload binary file to Supabase Storage Bucket and return public URL
+ * Upload a binary File object to Supabase Storage and return the permanent public URL.
+ * This is the ONLY way files should be stored — no DataURLs in the DB.
  */
 export async function uploadFileToStorage(
   bucketName: 'papers' | 'resources',
-  fileOrDataUrl: File | string,
-  fileName: string
+  file: File,
 ): Promise<string> {
-  try {
-    let blob: Blob
-    let mimeType = 'application/pdf'
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `uploads/${Date.now()}_${safeName}`
 
-    if (typeof fileOrDataUrl === 'string') {
-      const match = fileOrDataUrl.match(/^data:(.*?);base64,(.*)$/)
-      if (match) {
-        mimeType = match[1]
-        const byteCharacters = atob(match[2])
-        const byteNumbers = new Array(byteCharacters.length)
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i)
-        }
-        blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType })
-      } else {
-        return fileOrDataUrl
-      }
-    } else {
-      blob = fileOrDataUrl
-      mimeType = fileOrDataUrl.type
-    }
+  const { data, error } = await supabase.storage
+    .from(bucketName)
+    .upload(path, file, {
+      upsert: true,
+      contentType: file.type,
+      cacheControl: '31536000', // 1-year CDN cache
+    })
 
-    const cleanPath = `uploads/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-    const { data, error } = await supabase.storage
-      .from(bucketName)
-      .upload(cleanPath, blob, { upsert: true, contentType: mimeType })
-
-    if (error) {
-      console.warn(`Supabase Storage upload warning (${bucketName}):`, error.message)
-      // Return Data URL if storage upload failed
-      return typeof fileOrDataUrl === 'string' ? fileOrDataUrl : ''
-    }
-
-    const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(cleanPath)
-    return publicUrlData.publicUrl || (typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '')
-  } catch (err) {
-    console.warn('Storage upload fallback:', err)
-    return typeof fileOrDataUrl === 'string' ? fileOrDataUrl : ''
+  if (error) {
+    throw new Error(`Storage upload failed (${bucketName}): ${error.message}`)
   }
+
+  const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(data.path)
+  if (!urlData?.publicUrl) {
+    throw new Error('Could not get public URL from Supabase Storage')
+  }
+
+  return urlData.publicUrl
 }
 
 /**
- * Upload a paper directly to Supabase cloud database & storage
+ * Write a paper record to Supabase DB after the file has been uploaded to Storage.
+ * paper.file_url must already be a permanent CDN URL (not a DataURL).
  */
 export async function syncPaperToCloud(paper: Paper): Promise<void> {
   try {
-    let fileUrl = paper.file_url || ''
-
-    // If file_url is a Data URL, upload to Storage Bucket first to get a lean CDN URL
-    if (fileUrl.startsWith('data:')) {
-      const storageUrl = await uploadFileToStorage('papers', fileUrl, `${paper.subject_name}_paper.pdf`)
-      if (storageUrl && !storageUrl.startsWith('data:')) {
-        fileUrl = storageUrl
-      }
+    if (!paper.file_url || paper.file_url.startsWith('data:')) {
+      console.warn('syncPaperToCloud: skipping — file_url is missing or is a DataURL. Upload to Storage first.')
+      return
     }
 
     const row = {
@@ -155,17 +141,18 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
       exam_label: paper.exam_label,
       academic_year: paper.academic_year,
       semester_number: paper.semester_number || 1,
-      file_url: fileUrl,
+      file_url: paper.file_url,
       uploaded_by: paper.uploaded_by,
       verification_status: 'verified',
       file_size: paper.file_size,
       sha256: paper.sha256,
     }
+
     const { error } = await supabase.from('papers').upsert([row])
     if (error) {
-      console.error('Cloud Paper Sync Error:', error)
+      console.error('Cloud Paper Sync Error:', error.message)
     } else {
-      console.log('Successfully synced paper to Supabase cloud:', paper.id)
+      console.log('✅ Paper synced to cloud:', paper.id)
     }
   } catch (err) {
     console.error('Failed to sync paper to Supabase:', err)
@@ -173,17 +160,14 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
 }
 
 /**
- * Upload a resource directly to Supabase cloud database & storage
+ * Write a resource record to Supabase DB after the file has been uploaded to Storage.
+ * resource.file_url must already be a permanent CDN URL (not a DataURL).
  */
 export async function syncResourceToCloud(resource: Resource): Promise<void> {
   try {
-    let fileUrl = resource.file_url || ''
-
-    if (fileUrl.startsWith('data:')) {
-      const storageUrl = await uploadFileToStorage('resources', fileUrl, `${resource.title}.pdf`)
-      if (storageUrl && !storageUrl.startsWith('data:')) {
-        fileUrl = storageUrl
-      }
+    if (!resource.file_url || resource.file_url.startsWith('data:')) {
+      console.warn('syncResourceToCloud: skipping — file_url is missing or is a DataURL. Upload to Storage first.')
+      return
     }
 
     const row = {
@@ -194,17 +178,18 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
       type: resource.type,
       title: resource.title,
       description: resource.description,
-      file_url: fileUrl,
+      file_url: resource.file_url,
       uploaded_by: resource.uploaded_by,
       verification_status: 'verified',
       academic_year: resource.academic_year,
       sha256: resource.sha256,
     }
+
     const { error } = await supabase.from('resources').upsert([row])
     if (error) {
-      console.error('Cloud Resource Sync Error:', error)
+      console.error('Cloud Resource Sync Error:', error.message)
     } else {
-      console.log('Successfully synced resource to Supabase cloud:', resource.id)
+      console.log('✅ Resource synced to cloud:', resource.id)
     }
   } catch (err) {
     console.error('Failed to sync resource to Supabase:', err)
@@ -229,12 +214,48 @@ export async function syncSubjectToCloud(subject: Subject): Promise<void> {
     }
     const { error } = await supabase.from('subjects').upsert([row])
     if (error) {
-      console.error('Cloud Subject Sync Error:', error)
+      console.error('Cloud Subject Sync Error:', error.message)
     } else {
-      console.log('Successfully synced subject to Supabase cloud:', subject.id)
+      console.log('✅ Subject synced to cloud:', subject.id)
     }
   } catch (err) {
     console.error('Failed to sync subject to Supabase:', err)
   }
 }
 
+/** Helper to map a raw Supabase paper row → Paper */
+export function mapPaperRow(p: any): Paper {
+  return {
+    id: p.id,
+    subject_id: p.subject_id,
+    subject_name: p.subject_name || p.title || 'Subject Paper',
+    branch_code: p.branch_code || 'CSE',
+    exam_type: p.exam_type || 'midterm',
+    exam_label: p.exam_label || 'Mid Term',
+    academic_year: p.academic_year || '2025-26',
+    semester_number: p.semester_number || 1,
+    file_url: p.file_url,
+    uploaded_by: p.uploaded_by || 'Anonymous',
+    verification_status: 'verified',
+    file_size: p.file_size ? Number(p.file_size) : undefined,
+    sha256: p.sha256,
+  }
+}
+
+/** Helper to map a raw Supabase resource row → Resource */
+export function mapResourceRow(r: any): Resource {
+  return {
+    id: r.id,
+    subject_id: r.subject_id,
+    subject_name: r.subject_name || 'Subject Resource',
+    branch_code: r.branch_code || 'CSE',
+    type: r.type || r.resource_type || 'notes',
+    title: r.title,
+    description: r.description || '',
+    file_url: r.file_url,
+    uploaded_by: r.uploaded_by || 'Anonymous',
+    verification_status: 'verified',
+    academic_year: r.academic_year || '2025-26',
+    sha256: r.sha256,
+  }
+}
