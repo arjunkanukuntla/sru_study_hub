@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Analytics } from '@vercel/analytics/react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { getAnonId } from '@/lib/anonId'
 
@@ -88,6 +89,7 @@ export default function App() {
             </Route>
           </Routes>
         </Suspense>
+        <Analytics />
       </BrowserRouter>
     </QueryClientProvider>
   )
