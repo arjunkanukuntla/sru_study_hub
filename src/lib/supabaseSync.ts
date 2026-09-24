@@ -142,7 +142,12 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
     sha256: paper.sha256,
   }
 
-  const { error } = await supabase.from('papers').upsert([row])
+  // Upsert: if same file (sha256) already exists in DB, update it (no-op for immutable files)
+  // onConflict: 'sha256' is the server-side deduplication guard
+  const { error } = await supabase.from('papers').upsert([row], {
+    onConflict: 'sha256',
+    ignoreDuplicates: false,
+  })
   if (error) {
     throw new Error(`Supabase DB write failed (papers): ${error.message} [code: ${error.code}]`)
   }
@@ -175,7 +180,12 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
     sha256: resource.sha256,
   }
 
-  const { error } = await supabase.from('resources').upsert([row])
+  // Upsert: if same file (sha256) already exists in DB, update it (no-op for immutable files)
+  // onConflict: 'sha256' is the server-side deduplication guard
+  const { error } = await supabase.from('resources').upsert([row], {
+    onConflict: 'sha256',
+    ignoreDuplicates: false,
+  })
   if (error) {
     throw new Error(`Supabase DB write failed (resources): ${error.message} [code: ${error.code}]`)
   }
