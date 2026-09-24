@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Upload, CheckCircle, AlertCircle, Loader, X, CloudUpload } from 'lucide-react'
+import { Upload, CheckCircle, AlertCircle, Loader, X } from 'lucide-react'
 import {
   validateFile, validateContentSafety, sha256, checkUploadRateLimit, incrementUploadCount,
   formatBytes, optimizeUploadFile, ALLOWED_MIMES
@@ -224,7 +224,7 @@ export default function UploadPage() {
 
   if (success) {
     return (
-      <div className="page-wrapper" style={{ maxWidth: 640, marginInline: 'auto' }}>
+      <div className="page-wrapper" style={{ maxWidth: 560, marginInline: 'auto' }}>
         <div className="card" style={{ padding: '2.5rem', textAlign: 'center' }}>
           <div style={{
             width: 72, height: 72, borderRadius: '50%',
@@ -235,36 +235,11 @@ export default function UploadPage() {
           }}>
             <CheckCircle size={36} color="white" />
           </div>
-          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.375rem' }}>Upload Live!</h1>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
-            Your file is now stored on <strong>Supabase CDN</strong> and immediately visible to
-            every SR University student — in any browser, on any device.
+          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Upload Successful!</h1>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', lineHeight: 1.7 }}>
+            Your material is now live and available to all SR University students.
+            Thank you for contributing to the community! 🎉
           </p>
-
-          {uploadedUrl && (
-            <div className="alert alert-success" style={{ marginBottom: '1.25rem', textAlign: 'left', wordBreak: 'break-all' }}>
-              <div style={{ fontSize: '0.8125rem' }}>
-                <strong>🌐 Public CDN URL:</strong><br />
-                <a href={uploadedUrl} target="_blank" rel="noopener noreferrer"
-                   style={{ color: 'var(--color-primary-500)', fontSize: '0.75rem' }}>
-                  {uploadedUrl}
-                </a>
-              </div>
-            </div>
-          )}
-
-          <div className="alert" style={{
-            background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)',
-            marginBottom: '1.5rem', textAlign: 'left',
-          }}>
-            <div style={{ fontSize: '0.8125rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              <div>✅ <strong>Uploaded to Supabase Storage</strong> — permanent CDN link</div>
-              <div>✅ <strong>Saved to Supabase Database</strong> — visible to all users</div>
-              <div>✅ <strong>Realtime broadcast</strong> — other open tabs get it instantly</div>
-              <div>✅ <strong>Zero duplicates</strong> — SHA-256 hash deduplication active</div>
-            </div>
-          </div>
-
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={handleReset}>Upload Another</button>
             {materialType === 'paper' || materialType === 'lab_paper' ? (
@@ -282,13 +257,9 @@ export default function UploadPage() {
   return (
     <div className="page-wrapper" style={{ maxWidth: 700, marginInline: 'auto' }}>
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.5rem', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <CloudUpload size={24} style={{ color: 'var(--color-primary-500)' }} />
-          Upload Material
-        </h1>
+        <h1 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>Upload Material</h1>
         <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-          Files are uploaded to <strong>Supabase Cloud Storage</strong> — visible to all students instantly.
-          Anonymous ID: <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', background: 'var(--bg-muted)', padding: '1px 5px', borderRadius: 4 }}>{getAnonId()}</code>
+          Share question papers, notes, and resources with all SR University students.
         </p>
       </div>
 
@@ -478,10 +449,8 @@ export default function UploadPage() {
 
         {/* Info */}
         <div className="alert alert-info" style={{ fontSize: '0.8rem' }}>
-          <div>
-            ☁️ Files are uploaded directly to <strong>Supabase Storage CDN</strong> — anyone can access them instantly.
-            Duplicates are skipped via SHA-256 hash. Your anonymous ID (<code style={{ fontFamily: 'var(--font-mono)' }}>{getAnonId()}</code>) is used for contributor credit.
-          </div>
+          📋 Uploads are reviewed for content safety and published automatically.
+          Files you upload will be visible to all SR University students.
         </div>
 
         <button
@@ -490,9 +459,9 @@ export default function UploadPage() {
           disabled={uploading || !file || !rateLimit.allowed}
         >
           {uploading ? (
-            <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Uploading to Cloud…</>
+            <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Uploading…</>
           ) : (
-            <><CloudUpload size={16} /> Upload to Cloud</>
+            <><Upload size={16} /> Submit Upload</>
           )}
         </button>
       </form>
