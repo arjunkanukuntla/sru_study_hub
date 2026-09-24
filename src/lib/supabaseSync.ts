@@ -2,6 +2,38 @@ import { supabase } from './supabase'
 import type { Subject, Paper, Resource } from '@/data/catalog'
 
 
+/**
+ * Deterministic UUID from a string — same input always → same UUID.
+ * Used to convert local text IDs (e.g. "sub-eee-1790264739087") into
+ * consistent UUID values for Supabase uuid columns without random drift.
+ * If the string is already a valid UUID, it's returned as-is.
+ */
+function deterministicUuid(str: string): string {
+  if (!str) return crypto.randomUUID()
+  // If already a valid UUID format, return as-is
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
+    return str
+  }
+  // djb2-based hash into 4 buckets → format as UUID v4
+  let h1 = 0x811c9dc5, h2 = 0xd3a06c80, h3 = 0xde2b3b24, h4 = 0x9e3779b9
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i)
+    h1 = (Math.imul(h1 ^ c, 0x01000193)) >>> 0
+    h2 = (Math.imul(h2 ^ c, 0x811c9dc5)) >>> 0
+    h3 = (Math.imul(h3 ^ c, 0xd3a06c80)) >>> 0
+    h4 = (Math.imul(h4 ^ c, 0xde2b3b24)) >>> 0
+  }
+  const f = (n: number) => n.toString(16).padStart(8, '0')
+  // Set version=4 and variant=10xx
+  return [
+    f(h1),
+    f(h2).slice(0, 4),
+    '4' + f(h3).slice(1, 4),
+    (8 + (h4 & 3)).toString(16) + f(h4).slice(1, 4),
+    f(h1 ^ h2) + f(h3 ^ h4).slice(0, 4),
+  ].join('-')
+}
+
 function mapExamType(type: string): string {
   if (type === 'midterm' || type === 'mid1') return 'mid1'
   if (type === 'mid2') return 'mid2'
@@ -127,8 +159,8 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
 
   // Use original string IDs — papers/subjects tables use TEXT primary keys, not UUID
   const row = {
-    id: paper.id,
-    subject_id: paper.subject_id,
+    id: crypto.randomUUID(),   // Supabase id column is uuid type
+    subject_id: deterministicUuid(paper.subject_id),  // consistent UUID per subject
     subject_name: paper.subject_name,
     branch_code: paper.branch_code,
     exam_type: mapExamType(paper.exam_type),
@@ -166,8 +198,8 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
 
   // Use original string IDs — resources/subjects tables use TEXT primary keys, not UUID
   const row = {
-    id: resource.id,
-    subject_id: resource.subject_id,
+    id: crypto.randomUUID(),   // Supabase id column is uuid type
+    subject_id: deterministicUuid(resource.subject_id),  // consistent UUID per subject
     subject_name: resource.subject_name,
     branch_code: resource.branch_code,
     type: resource.type,
@@ -197,9 +229,9 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
  */
 export async function syncSubjectToCloud(subject: Subject): Promise<void> {
   try {
-    // Use original string ID — subjects table uses TEXT primary key
+    // Use deterministic UUID for subjects so same local ID → same Supabase UUID
     const row = {
-      id: subject.id,
+      id: deterministicUuid(subject.id),
       name: subject.name,
       code: subject.code,
       branch_id: subject.branch_id,
