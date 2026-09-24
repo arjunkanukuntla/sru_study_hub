@@ -64,11 +64,21 @@ export default function PaperDetailPage() {
           </div>
 
           {paper.file_url ? (
-            <iframe
-              src={paper.file_url}
-              title={`${paper.subject_name} ${paper.exam_label}`}
-              style={{ width: '100%', height: 'min(75vh, 700px)', border: 'none', display: 'block' }}
-            />
+            paper.file_url.startsWith('data:image/') || paper.file_url.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem', background: 'var(--bg-base)', minHeight: 400 }}>
+                <img
+                  src={paper.file_url}
+                  alt={`${paper.subject_name} ${paper.exam_label}`}
+                  style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', borderRadius: 'var(--radius-md)' }}
+                />
+              </div>
+            ) : (
+              <iframe
+                src={paper.file_url}
+                title={`${paper.subject_name} ${paper.exam_label}`}
+                style={{ width: '100%', height: 'min(75vh, 700px)', border: 'none', display: 'block' }}
+              />
+            )
           ) : (
             <div className="empty-state" style={{ minHeight: 320 }}>
               <div className="empty-state-icon"><FileText size={28} /></div>

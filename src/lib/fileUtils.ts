@@ -166,11 +166,23 @@ export async function optimizeUploadFile(file: File): Promise<{
     }
   }
 
-  // 2. PDF & Word Document Compression (using native Web CompressionStream API)
+  // 2. Document Handling (PDFs & Word Docs)
+  // Note: PDF files must remain valid %PDF-1.x binaries so browser PDF readers can render them natively in iframes without corruption.
   if (
     file.type === 'application/pdf' ||
+    file.name.endsWith('.pdf')
+  ) {
+    return {
+      optimizedFile: file,
+      originalSize,
+      optimizedSize: originalSize,
+      compressed: false,
+      fileTypeLabel: 'PDF Document (Standard)',
+    }
+  }
+
+  if (
     file.type.includes('word') ||
-    file.name.endsWith('.pdf') ||
     file.name.endsWith('.docx') ||
     file.name.endsWith('.doc')
   ) {
@@ -184,7 +196,7 @@ export async function optimizeUploadFile(file: File): Promise<{
             originalSize,
             optimizedSize: optimizedFile.size,
             compressed: true,
-            fileTypeLabel: file.type === 'application/pdf' ? 'PDF (Stream Compressed)' : 'Word Doc (Compressed)',
+            fileTypeLabel: 'Word Doc (Compressed)',
           }
         }
       }
