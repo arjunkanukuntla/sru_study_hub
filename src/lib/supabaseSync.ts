@@ -124,76 +124,66 @@ export async function uploadFileToStorage(
 /**
  * Write a paper record to Supabase DB after the file has been uploaded to Storage.
  * paper.file_url must already be a permanent CDN URL (not a DataURL).
+ * THROWS on error so callers can handle the failure.
  */
 export async function syncPaperToCloud(paper: Paper): Promise<void> {
-  try {
-    if (!paper.file_url || paper.file_url.startsWith('data:')) {
-      console.warn('syncPaperToCloud: skipping — file_url is missing or is a DataURL. Upload to Storage first.')
-      return
-    }
-
-    const row = {
-      id: toUuid(paper.id),
-      subject_id: toUuid(paper.subject_id),
-      subject_name: paper.subject_name,
-      branch_code: paper.branch_code,
-      exam_type: mapExamType(paper.exam_type),
-      exam_label: paper.exam_label,
-      academic_year: paper.academic_year,
-      semester_number: paper.semester_number || 1,
-      file_url: paper.file_url,
-      uploaded_by: paper.uploaded_by,
-      verification_status: 'verified',
-      file_size: paper.file_size,
-      sha256: paper.sha256,
-    }
-
-    const { error } = await supabase.from('papers').upsert([row])
-    if (error) {
-      console.error('Cloud Paper Sync Error:', error.message)
-    } else {
-      console.log('✅ Paper synced to cloud:', paper.id)
-    }
-  } catch (err) {
-    console.error('Failed to sync paper to Supabase:', err)
+  if (!paper.file_url || paper.file_url.startsWith('data:')) {
+    throw new Error('syncPaperToCloud: file_url must be a permanent CDN URL, not a DataURL. Upload to Storage first.')
   }
+
+  const row = {
+    id: toUuid(paper.id),
+    subject_id: toUuid(paper.subject_id),
+    subject_name: paper.subject_name,
+    branch_code: paper.branch_code,
+    exam_type: mapExamType(paper.exam_type),
+    exam_label: paper.exam_label,
+    academic_year: paper.academic_year,
+    semester_number: paper.semester_number || 1,
+    file_url: paper.file_url,
+    uploaded_by: paper.uploaded_by,
+    verification_status: 'verified',
+    file_size: paper.file_size,
+    sha256: paper.sha256,
+  }
+
+  const { error } = await supabase.from('papers').upsert([row])
+  if (error) {
+    throw new Error(`Supabase DB write failed (papers): ${error.message} [code: ${error.code}]`)
+  }
+  console.log('✅ Paper synced to cloud DB:', paper.id)
 }
 
 /**
  * Write a resource record to Supabase DB after the file has been uploaded to Storage.
  * resource.file_url must already be a permanent CDN URL (not a DataURL).
+ * THROWS on error so callers can handle the failure.
  */
 export async function syncResourceToCloud(resource: Resource): Promise<void> {
-  try {
-    if (!resource.file_url || resource.file_url.startsWith('data:')) {
-      console.warn('syncResourceToCloud: skipping — file_url is missing or is a DataURL. Upload to Storage first.')
-      return
-    }
-
-    const row = {
-      id: toUuid(resource.id),
-      subject_id: toUuid(resource.subject_id),
-      subject_name: resource.subject_name,
-      branch_code: resource.branch_code,
-      type: resource.type,
-      title: resource.title,
-      description: resource.description,
-      file_url: resource.file_url,
-      uploaded_by: resource.uploaded_by,
-      verification_status: 'verified',
-      academic_year: resource.academic_year,
-      sha256: resource.sha256,
-    }
-
-    const { error } = await supabase.from('resources').upsert([row])
-    if (error) {
-      console.error('Cloud Resource Sync Error:', error.message)
-    } else {
-      console.log('✅ Resource synced to cloud:', resource.id)
-    }
-  } catch (err) {
-    console.error('Failed to sync resource to Supabase:', err)
+  if (!resource.file_url || resource.file_url.startsWith('data:')) {
+    throw new Error('syncResourceToCloud: file_url must be a permanent CDN URL. Upload to Storage first.')
   }
+
+  const row = {
+    id: toUuid(resource.id),
+    subject_id: toUuid(resource.subject_id),
+    subject_name: resource.subject_name,
+    branch_code: resource.branch_code,
+    type: resource.type,
+    title: resource.title,
+    description: resource.description,
+    file_url: resource.file_url,
+    uploaded_by: resource.uploaded_by,
+    verification_status: 'verified',
+    academic_year: resource.academic_year,
+    sha256: resource.sha256,
+  }
+
+  const { error } = await supabase.from('resources').upsert([row])
+  if (error) {
+    throw new Error(`Supabase DB write failed (resources): ${error.message} [code: ${error.code}]`)
+  }
+  console.log('✅ Resource synced to cloud DB:', resource.id)
 }
 
 /**

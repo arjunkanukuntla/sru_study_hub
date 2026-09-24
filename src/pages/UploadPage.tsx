@@ -7,7 +7,7 @@ import {
 import { getAnonId } from '@/lib/anonId'
 import { BRANCHES, ACADEMIC_YEARS, EXAM_TYPES } from '@/data/catalog'
 import { useAppStore } from '@/lib/store'
-import { uploadFileToStorage } from '@/lib/supabaseSync'
+import { uploadFileToStorage, syncPaperToCloud, syncResourceToCloud } from '@/lib/supabaseSync'
 
 const MATERIAL_TYPES = [
   { value: 'paper', label: '📄 Previous Paper', desc: 'Mid-term or end-term question paper' },
@@ -160,16 +160,17 @@ export default function UploadPage() {
       setUploadedUrl(cdnUrl)
       updateStep('upload', 'done', `CDN URL secured ✓`)
 
-      // ── Step 6: Save metadata to database ────────────────────────────────
+      // ── Step 6: Save metadata to Supabase DB (awaited — must succeed) ────
       updateStep('meta', 'active')
-      await new Promise(r => setTimeout(r, 100))
 
       const isLab = materialType === 'lab_paper' || materialType === 'lab_manual'
       const targetSubject = findOrCreateSubject(subject, branch, 'sem1', isLab ? 'lab' : 'theory')
       const branchObj = BRANCHES.find(b => b.id === branch)
+      const newId = `paper-${Date.now()}`
 
       if (materialType === 'paper' || materialType === 'lab_paper') {
-        addPaper({
+        const paperData = {
+          id: newId,
           subject_id: targetSubject.id,
           subject_name: targetSubject.name,
           branch_code: branchObj?.code || 'CSE',
@@ -177,35 +178,43 @@ export default function UploadPage() {
           exam_label: EXAM_TYPES[examType] || 'Mid Term',
           academic_year: academicYear,
           semester_number: parseInt(targetSubject.semester_id.replace('sem', '')) || 1,
-          file_url: cdnUrl,          // ✅ Permanent Supabase CDN URL
+          file_url: cdnUrl,
           uploaded_by: getAnonId(),
-          verification_status: 'verified',
+          verification_status: 'verified' as const,
           file_size: uploadFile.size,
           sha256: hash,
-        })
+        }
+        // ① Write to Supabase DB first — throws if it fails
+        await syncPaperToCloud(paperData)
+        // ② Only update local store after DB confirms success
+        addPaper(paperData)
       } else {
-        addResource({
+        const resourceData = {
+          id: newId,
           subject_id: targetSubject.id,
           subject_name: targetSubject.name,
           branch_code: branchObj?.code || 'CSE',
           type: (materialType || 'notes') as any,
           title: title || `${targetSubject.name} ${materialType}`,
           description: description || 'Uploaded study resource',
-          file_url: cdnUrl,          // ✅ Permanent Supabase CDN URL
+          file_url: cdnUrl,
           uploaded_by: getAnonId(),
-          verification_status: 'verified',
+          verification_status: 'verified' as const,
           academic_year: academicYear,
           sha256: hash,
-        })
+        }
+        // ① Write to Supabase DB first — throws if it fails
+        await syncResourceToCloud(resourceData)
+        // ② Only update local store after DB confirms success
+        addResource(resourceData)
       }
 
-      updateStep('meta', 'done', 'Record saved to Supabase DB ✓')
+      updateStep('meta', 'done', 'Saved to Supabase DB ✓')
 
       // ── Step 7: Publish ───────────────────────────────────────────────────
       updateStep('publish', 'active')
-      await new Promise(r => setTimeout(r, 200))
       incrementUploadCount()
-      updateStep('publish', 'done', 'Live & visible to ALL users instantly ✓')
+      updateStep('publish', 'done', 'Live & visible to all students ✓')
 
       setSuccess(true)
     } catch (err) {

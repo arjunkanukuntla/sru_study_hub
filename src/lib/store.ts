@@ -8,8 +8,6 @@ import {
 } from '@/data/catalog'
 import {
   fetchCloudData,
-  syncPaperToCloud,
-  syncResourceToCloud,
   syncSubjectToCloud,
   mapPaperRow,
   mapResourceRow,
@@ -181,10 +179,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           papers: [newPaper, ...state.papers.filter(p => p.id !== id)],
         }))
-        // Only sync if we have a real URL (storage upload already done in UploadPage)
-        if (newPaper.file_url && !newPaper.file_url.startsWith('data:')) {
-          syncPaperToCloud(newPaper)
-        }
+        // Note: cloud sync is handled by UploadPage (awaited before addPaper is called)
         return newPaper
       },
 
@@ -198,10 +193,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           resources: [newResource, ...state.resources.filter(r => r.id !== id)],
         }))
-        // Only sync if we have a real URL
-        if (newResource.file_url && !newResource.file_url.startsWith('data:')) {
-          syncResourceToCloud(newResource)
-        }
+        // Note: cloud sync is handled by UploadPage (awaited before addResource is called)
         return newResource
       },
 
