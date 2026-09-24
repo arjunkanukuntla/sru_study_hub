@@ -1,6 +1,23 @@
 import { supabase } from './supabase'
 import type { Subject, Paper, Resource } from '@/data/catalog'
 
+function toUuid(id: string): string {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return id
+  }
+  return crypto.randomUUID()
+}
+
+function mapExamType(type: string): string {
+  if (type === 'midterm' || type === 'mid1') return 'mid1'
+  if (type === 'mid2') return 'mid2'
+  if (type === 'endterm' || type === 'end_term') return 'endterm'
+  if (type === 'lab_mid') return 'lab_mid'
+  if (type === 'lab_end') return 'lab_end'
+  if (type === 'supplementary') return 'supplementary'
+  return 'mid1'
+}
+
 /**
  * Fetch all community-uploaded subjects, papers, and resources from Supabase
  */
@@ -71,14 +88,14 @@ export async function fetchCloudData(): Promise<{
 export async function syncPaperToCloud(paper: Paper): Promise<void> {
   try {
     const row = {
-      id: paper.id,
-      subject_id: paper.subject_id,
+      id: toUuid(paper.id),
+      subject_id: toUuid(paper.subject_id),
       subject_name: paper.subject_name,
       branch_code: paper.branch_code,
-      exam_type: paper.exam_type,
+      exam_type: mapExamType(paper.exam_type),
       exam_label: paper.exam_label,
       academic_year: paper.academic_year,
-      semester_number: paper.semester_number,
+      semester_number: paper.semester_number || 1,
       file_url: paper.file_url,
       uploaded_by: paper.uploaded_by,
       verification_status: 'verified',
@@ -88,6 +105,8 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
     const { error } = await supabase.from('papers').upsert([row])
     if (error) {
       console.error('Cloud Paper Sync Error:', error)
+    } else {
+      console.log('Successfully synced paper to Supabase cloud:', paper.id)
     }
   } catch (err) {
     console.error('Failed to sync paper to Supabase:', err)
@@ -100,8 +119,8 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
 export async function syncResourceToCloud(resource: Resource): Promise<void> {
   try {
     const row = {
-      id: resource.id,
-      subject_id: resource.subject_id,
+      id: toUuid(resource.id),
+      subject_id: toUuid(resource.subject_id),
       subject_name: resource.subject_name,
       branch_code: resource.branch_code,
       type: resource.type,
@@ -116,6 +135,8 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
     const { error } = await supabase.from('resources').upsert([row])
     if (error) {
       console.error('Cloud Resource Sync Error:', error)
+    } else {
+      console.log('Successfully synced resource to Supabase cloud:', resource.id)
     }
   } catch (err) {
     console.error('Failed to sync resource to Supabase:', err)
@@ -128,11 +149,12 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
 export async function syncSubjectToCloud(subject: Subject): Promise<void> {
   try {
     const row = {
-      id: subject.id,
+      id: toUuid(subject.id),
       name: subject.name,
       code: subject.code,
       branch_id: subject.branch_id,
       semester_id: subject.semester_id,
+      semester_num: 1,
       credits: subject.credits,
       type: subject.type,
       units_count: subject.units_count,
@@ -140,8 +162,11 @@ export async function syncSubjectToCloud(subject: Subject): Promise<void> {
     const { error } = await supabase.from('subjects').upsert([row])
     if (error) {
       console.error('Cloud Subject Sync Error:', error)
+    } else {
+      console.log('Successfully synced subject to Supabase cloud:', subject.id)
     }
   } catch (err) {
     console.error('Failed to sync subject to Supabase:', err)
   }
 }
+
