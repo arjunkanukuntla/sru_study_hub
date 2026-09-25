@@ -4,17 +4,15 @@ import type { Subject, Paper, Resource } from '@/data/catalog'
 
 /**
  * Deterministic UUID from a string — same input always → same UUID.
- * Used to convert local text IDs (e.g. "sub-eee-1790264739087") into
- * consistent UUID values for Supabase uuid columns without random drift.
+ * Used to convert local text IDs into consistent UUID values for Supabase uuid columns.
  * If the string is already a valid UUID, it's returned as-is.
  */
 function deterministicUuid(str: string): string {
   if (!str) return crypto.randomUUID()
-  // If already a valid UUID format, return as-is
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
     return str
   }
-  // djb2-based hash into 4 buckets → format as UUID v4
+  // djb2-based hash into 4 unsigned 32-bit buckets → UUID v4 format
   let h1 = 0x811c9dc5, h2 = 0xd3a06c80, h3 = 0xde2b3b24, h4 = 0x9e3779b9
   for (let i = 0; i < str.length; i++) {
     const c = str.charCodeAt(i)
@@ -23,14 +21,16 @@ function deterministicUuid(str: string): string {
     h3 = (Math.imul(h3 ^ c, 0xd3a06c80)) >>> 0
     h4 = (Math.imul(h4 ^ c, 0xde2b3b24)) >>> 0
   }
-  const f = (n: number) => n.toString(16).padStart(8, '0')
-  // Set version=4 and variant=10xx
+  // Always use >>> 0 before toString(16) to keep values unsigned (avoids '-' in hex)
+  const f = (n: number) => (n >>> 0).toString(16).padStart(8, '0')
+  const xor1 = ((h1 ^ h2) >>> 0)
+  const xor2 = ((h3 ^ h4) >>> 0)
   return [
     f(h1),
     f(h2).slice(0, 4),
     '4' + f(h3).slice(1, 4),
     (8 + (h4 & 3)).toString(16) + f(h4).slice(1, 4),
-    f(h1 ^ h2) + f(h3 ^ h4).slice(0, 4),
+    f(xor1) + f(xor2).slice(0, 4),
   ].join('-')
 }
 
@@ -181,7 +181,8 @@ export async function syncPaperToCloud(paper: Paper): Promise<void> {
     ignoreDuplicates: false,
   })
   if (error) {
-    throw new Error(`Supabase DB write failed (papers): ${error.message} [code: ${error.code}]`)
+    console.error('[syncPaperToCloud]', error.message, error.code)
+    throw new Error('Unable to save your upload at this time. Please check your connection and try again.')
   }
   console.log('✅ Paper synced to cloud DB:', paper.id)
 }
@@ -219,7 +220,8 @@ export async function syncResourceToCloud(resource: Resource): Promise<void> {
     ignoreDuplicates: false,
   })
   if (error) {
-    throw new Error(`Supabase DB write failed (resources): ${error.message} [code: ${error.code}]`)
+    console.error('[syncResourceToCloud]', error.message, error.code)
+    throw new Error('Unable to save your upload at this time. Please check your connection and try again.')
   }
   console.log('✅ Resource synced to cloud DB:', resource.id)
 }

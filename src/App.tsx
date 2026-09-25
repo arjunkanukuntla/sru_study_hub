@@ -21,6 +21,8 @@ const SearchPage       = lazy(() => import('@/pages/SearchPage'))
 const UploadPage       = lazy(() => import('@/pages/UploadPage'))
 const MyStudyPage      = lazy(() => import('@/pages/MyStudyPage'))
 const AboutPage        = lazy(() => import('@/pages/AboutPage'))
+const TermsPage        = lazy(() => import('@/pages/TermsPage'))
+const PrivacyPage      = lazy(() => import('@/pages/PrivacyPage'))
 
 // React Query client — aggressive caching, minimal refetching
 const queryClient = new QueryClient({
@@ -83,6 +85,8 @@ export default function App() {
               <Route path="/upload"       element={<UploadPage />} />
               <Route path="/my-study"     element={<MyStudyPage />} />
               <Route path="/about"        element={<AboutPage />} />
+              <Route path="/terms"        element={<TermsPage />} />
+              <Route path="/privacy"      element={<PrivacyPage />} />
               <Route path="*"             element={<NotFoundPage />} />
             </Route>
           </Routes>

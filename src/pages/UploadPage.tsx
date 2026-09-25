@@ -22,13 +22,13 @@ const MATERIAL_TYPES = [
 type UploadStep = { id: string; label: string; status: 'pending' | 'active' | 'done' | 'error'; detail?: string }
 
 const INITIAL_STEPS: UploadStep[] = [
-  { id: 'validate', label: 'Validating file & content safety', status: 'pending' },
-  { id: 'compress', label: 'Optimizing & compressing file', status: 'pending' },
-  { id: 'hash', label: 'Calculating file hash (SHA-256)', status: 'pending' },
-  { id: 'duplicate', label: 'Checking for duplicates', status: 'pending' },
-  { id: 'upload', label: 'Uploading to Supabase Storage (CDN)', status: 'pending' },
-  { id: 'meta', label: 'Saving metadata to database', status: 'pending' },
-  { id: 'publish', label: 'Publishing & broadcasting to all users', status: 'pending' },
+  { id: 'validate',  label: 'Checking your file',          status: 'pending' },
+  { id: 'compress',  label: 'Optimising file size',         status: 'pending' },
+  { id: 'hash',      label: 'Preparing upload',             status: 'pending' },
+  { id: 'duplicate', label: 'Checking for duplicates',      status: 'pending' },
+  { id: 'upload',    label: 'Uploading file',               status: 'pending' },
+  { id: 'meta',      label: 'Saving details',               status: 'pending' },
+  { id: 'publish',   label: 'Making it available',          status: 'pending' },
 ]
 
 export default function UploadPage() {
@@ -155,10 +155,10 @@ export default function UploadPage() {
       try {
         cdnUrl = await uploadFileToStorage(bucket, cdnFile)
       } catch (storageErr) {
-        throw new Error(`Storage upload failed: ${storageErr instanceof Error ? storageErr.message : storageErr}. Check that your Supabase Storage buckets "papers" and "resources" are created and set to Public.`)
+        throw new Error('File upload failed. Please check your connection and try again.')
       }
       setUploadedUrl(cdnUrl)
-      updateStep('upload', 'done', `CDN URL secured ✓`)
+      updateStep('upload', 'done', 'Upload complete ✓')
 
       // ── Step 6: Save metadata to Supabase DB (awaited — must succeed) ────
       updateStep('meta', 'active')
@@ -458,7 +458,8 @@ export default function UploadPage() {
 
         {/* Info */}
         <div className="alert alert-info" style={{ fontSize: '0.8rem' }}>
-          📋 Uploads are reviewed for content safety and published automatically.
+          📌 By uploading, you confirm this material is intended for educational use and you agree to our{' '}
+          <a href="/terms" style={{ color: 'var(--color-primary-600)', textDecoration: 'underline' }}>Terms of Use</a>.
           Files you upload will be visible to all SR University students.
         </div>
 

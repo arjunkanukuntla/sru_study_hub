@@ -94,9 +94,13 @@ export function Sidebar({ onClose }: SidebarProps) {
 
       {/* Footer info */}
       <div style={{ padding: '0.75rem 0.625rem', borderTop: '1px solid var(--border-base)' }}>
-        <div style={{ fontSize: '0.68rem', color: 'var(--text-subtle)', padding: '0.25rem 0.5rem', lineHeight: 1.4 }}>
+        <div style={{ fontSize: '0.68rem', color: 'var(--text-subtle)', padding: '0.25rem 0.5rem', lineHeight: 1.6 }}>
           SRU Study Hub v1.0<br />
-          <span style={{ color: 'var(--color-primary-500)' }}>SR University Academic Resource</span>
+          <span style={{ color: 'var(--color-primary-500)' }}>SR University Academic Resource</span><br />
+          <span style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+            <a href="/terms"   style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Terms</a>
+            <a href="/privacy" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Privacy</a>
+          </span>
         </div>
       </div>
     </div>
