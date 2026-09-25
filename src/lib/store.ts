@@ -71,10 +71,24 @@ export const useAppStore = create<AppState>()(
               r => !cloudResIds.has(r.id) && r.file_url && !r.file_url.startsWith('data:')
             )
 
+            // ── Deduplicate by sha256 (safety net in case DB has duplicate rows) ──
+            const dedupBySha256 = <T extends { sha256?: string; file_url?: string }>(items: T[]): T[] => {
+              const seen = new Set<string>()
+              return items.filter(item => {
+                if (!item.sha256) return true  // no sha256 → always keep
+                if (seen.has(item.sha256)) return false
+                seen.add(item.sha256)
+                return true
+              })
+            }
+
+            const allPapers    = dedupBySha256([...cloud.papers,    ...localRealPapers])
+            const allResources = dedupBySha256([...cloud.resources,  ...localRealResources])
+
             return {
               subjects: [...builtInsNotInCloud, ...cloud.subjects],
-              papers: [...cloud.papers, ...localRealPapers],
-              resources: [...cloud.resources, ...localRealResources],
+              papers: allPapers,
+              resources: allResources,
               isCloudLoaded: true,
             }
           })
@@ -91,9 +105,11 @@ export const useAppStore = create<AppState>()(
               if (!p || !p.file_url || p.file_url.startsWith('data:')) return
               const newPaper = mapPaperRow(p)
               console.log('🔔 Realtime: new paper', newPaper.id)
-              set((state) => ({
-                papers: [newPaper, ...state.papers.filter(item => item.id !== newPaper.id)]
-              }))
+              set((state) => {
+                // Skip if same sha256 already exists (duplicate guard)
+                if (newPaper.sha256 && state.papers.some(item => item.sha256 === newPaper.sha256)) return state
+                return { papers: [newPaper, ...state.papers.filter(item => item.id !== newPaper.id)] }
+              })
             })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'papers' }, (payload) => {
               const p: any = payload.new
