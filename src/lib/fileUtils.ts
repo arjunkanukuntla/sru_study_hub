@@ -304,3 +304,42 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
   }
 }
 
+/**
+ * Merge multiple image files (JPEG/PNG/WebP) into a single PDF using pdf-lib.
+ * Each image becomes one page, sized to A4 at 96 dpi.
+ * Returns a File object named "<baseName>.pdf".
+ */
+export async function mergeImagesToPdf(images: File[], outputName = 'merged-paper.pdf'): Promise<File> {
+  const { PDFDocument } = await import('pdf-lib')
+  const pdfDoc = await PDFDocument.create()
+
+  for (const img of images) {
+    // Draw image onto canvas to get pixel data as JPEG
+    const bitmap = await createImageBitmap(img)
+    const canvas = document.createElement('canvas')
+    // A4 at 96 dpi ≈ 794 × 1123 px; keep image's natural ratio but cap width
+    const maxW = 794
+    const scale = Math.min(1, maxW / bitmap.width)
+    canvas.width  = Math.round(bitmap.width  * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+
+    const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    const jpegBytes   = Uint8Array.from(atob(jpegDataUrl.split(',')[1]), c => c.charCodeAt(0))
+    const pdfImage    = await pdfDoc.embedJpg(jpegBytes)
+
+    // Add page matching the image dimensions (in PDF points, 1px ≈ 0.75pt)
+    const page = pdfDoc.addPage([canvas.width * 0.75, canvas.height * 0.75])
+    page.drawImage(pdfImage, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() })
+  }
+
+  const pdfBytes = await pdfDoc.save()
+  return new File([pdfBytes.buffer as ArrayBuffer], outputName, { type: 'application/pdf' })
+}
+
+/** Returns true if the file is an image type that can be merged into PDF */
+export function isImageFile(file: File): boolean {
+  return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+}

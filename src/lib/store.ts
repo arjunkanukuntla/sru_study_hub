@@ -59,7 +59,25 @@ export const useAppStore = create<AppState>()(
             const cloudSubIds = new Set(cloud.subjects.map(s => s.id))
             const builtInsNotInCloud = state.subjects.filter(s => builtInSubIds.has(s.id) && !cloudSubIds.has(s.id))
 
-            // Papers: use ONLY cloud papers with real CDN URLs; keep local papers that have real URLs too
+            const mergedSubjects = [...builtInsNotInCloud, ...cloud.subjects]
+
+            // ── Build subject lookup: "name|branch_code" → local subject id ──
+            // Cloud papers store subject_id as a deterministic UUID; this lookup lets
+            // us remap them back to the catalog's local string IDs for consistent filtering.
+            const subjectKeyToId = new Map<string, string>()
+            for (const s of mergedSubjects) {
+              const branchCode = (s as any).branch_code || (s as any).branch_id || ''
+              const key = `${s.name.toLowerCase().trim()}|${branchCode.toLowerCase()}`
+              subjectKeyToId.set(key, s.id)
+            }
+
+            const remapSubjectId = <T extends { subject_id: string; subject_name?: string; branch_code?: string }>(item: T): T => {
+              const key = `${(item.subject_name || '').toLowerCase().trim()}|${(item.branch_code || '').toLowerCase()}`
+              const localId = subjectKeyToId.get(key)
+              return localId && localId !== item.subject_id ? { ...item, subject_id: localId } : item
+            }
+
+            // Papers: cloud only (real CDN URLs), plus local papers not yet in cloud
             const cloudPaperIds = new Set(cloud.papers.map(p => p.id))
             const localRealPapers = state.papers.filter(
               p => !cloudPaperIds.has(p.id) && p.file_url && !p.file_url.startsWith('data:')
@@ -72,21 +90,25 @@ export const useAppStore = create<AppState>()(
             )
 
             // ── Deduplicate by sha256 (safety net in case DB has duplicate rows) ──
-            const dedupBySha256 = <T extends { sha256?: string; file_url?: string }>(items: T[]): T[] => {
+            const dedupBySha256 = <T extends { sha256?: string }>(items: T[]): T[] => {
               const seen = new Set<string>()
               return items.filter(item => {
-                if (!item.sha256) return true  // no sha256 → always keep
+                if (!item.sha256) return true
                 if (seen.has(item.sha256)) return false
                 seen.add(item.sha256)
                 return true
               })
             }
 
-            const allPapers    = dedupBySha256([...cloud.papers,    ...localRealPapers])
-            const allResources = dedupBySha256([...cloud.resources,  ...localRealResources])
+            // Remap subject_ids then dedup
+            const remappedCloudPapers    = cloud.papers.map(remapSubjectId)
+            const remappedCloudResources = cloud.resources.map(remapSubjectId)
+
+            const allPapers    = dedupBySha256([...remappedCloudPapers,    ...localRealPapers])
+            const allResources = dedupBySha256([...remappedCloudResources,  ...localRealResources])
 
             return {
-              subjects: [...builtInsNotInCloud, ...cloud.subjects],
+              subjects: mergedSubjects,
               papers: allPapers,
               resources: allResources,
               isCloudLoaded: true,

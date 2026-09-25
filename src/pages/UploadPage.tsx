@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react'
-import { Upload, CheckCircle, AlertCircle, Loader, X, Files } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Upload, CheckCircle, AlertCircle, Loader, X, Files, ChevronUp, ChevronDown, FileText, Layers } from 'lucide-react'
 import {
   validateFile, validateContentSafety, sha256, checkUploadRateLimit, incrementUploadCount,
-  formatBytes, optimizeUploadFile, ALLOWED_MIMES
+  formatBytes, optimizeUploadFile, ALLOWED_MIMES, mergeImagesToPdf, isImageFile
 } from '@/lib/fileUtils'
 import { getAnonId } from '@/lib/anonId'
 import { BRANCHES, ACADEMIC_YEARS, EXAM_TYPES } from '@/data/catalog'
@@ -25,6 +25,7 @@ interface FileEntry {
   file: File
   status: FileStatus
   detail?: string
+  previewUrl?: string
 }
 
 type UploadStep = { id: string; label: string; status: 'pending' | 'active' | 'done' | 'error'; detail?: string }
@@ -50,16 +51,35 @@ export default function UploadPage() {
   const [fileEntries, setFileEntries]   = useState<FileEntry[]>([])
   const [dragOver, setDragOver]         = useState(false)
   const [uploading, setUploading]       = useState(false)
+  const [merging, setMerging]           = useState(false)
   const [steps, setSteps]               = useState<UploadStep[]>(makeSteps())
   const [currentFileIdx, setCurrentFileIdx] = useState(0)
   const [globalError, setGlobalError]   = useState('')
   const [doneCount, setDoneCount]       = useState(0)
 
   const rateLimit = checkUploadRateLimit()
+  const filteredSubjects = branch ? subjects.filter(s => s.branch_id === branch) : subjects
 
-  const filteredSubjects = branch
-    ? subjects.filter(s => s.branch_id === branch)
-    : subjects
+  // All entries are images → show combine panel
+  const allImages = fileEntries.length > 1 && fileEntries.every(e => isImageFile(e.file))
+
+  // Generate previews for image files
+  useEffect(() => {
+    let cancelled = false
+    const generatePreviews = async () => {
+      const updated = await Promise.all(fileEntries.map(async entry => {
+        if (entry.previewUrl || !isImageFile(entry.file)) return entry
+        const url = URL.createObjectURL(entry.file)
+        return { ...entry, previewUrl: url }
+      }))
+      if (!cancelled) setFileEntries(updated)
+    }
+    if (fileEntries.some(e => isImageFile(e.file) && !e.previewUrl)) {
+      generatePreviews()
+    }
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileEntries.length])
 
   const updateStep = (id: string, status: UploadStep['status'], detail?: string) => {
     setSteps(prev => prev.map(s => s.id === id ? { ...s, status, detail } : s))
@@ -69,10 +89,7 @@ export default function UploadPage() {
     const valid: FileEntry[] = []
     for (const f of incoming) {
       const result = validateFile(f)
-      if (!result.valid) {
-        setGlobalError(`"${f.name}": ${result.error}`)
-        continue
-      }
+      if (!result.valid) { setGlobalError(`"${f.name}": ${result.error}`); continue }
       valid.push({ file: f, status: 'pending' })
     }
     setFileEntries(prev => {
@@ -93,7 +110,38 @@ export default function UploadPage() {
   }
 
   const removeFile = (idx: number) => {
-    setFileEntries(prev => prev.filter((_, i) => i !== idx))
+    setFileEntries(prev => {
+      const entry = prev[idx]
+      if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl)
+      return prev.filter((_, i) => i !== idx)
+    })
+  }
+
+  const moveFile = (idx: number, dir: -1 | 1) => {
+    setFileEntries(prev => {
+      const next = [...prev]
+      const target = idx + dir
+      if (target < 0 || target >= next.length) return prev
+      ;[next[idx], next[target]] = [next[target], next[idx]]
+      return next
+    })
+  }
+
+  const handleMerge = async () => {
+    if (!allImages) return
+    setMerging(true)
+    setGlobalError('')
+    try {
+      const autoName = (subject || 'paper').replace(/\s+/g, '-').toLowerCase() + '.pdf'
+      const merged = await mergeImagesToPdf(fileEntries.map(e => e.file), autoName)
+      // Clean up old preview URLs
+      fileEntries.forEach(e => { if (e.previewUrl) URL.revokeObjectURL(e.previewUrl) })
+      setFileEntries([{ file: merged, status: 'pending' }])
+    } catch (err) {
+      setGlobalError('Failed to combine images. Please try again.')
+    } finally {
+      setMerging(false)
+    }
   }
 
   const uploadSingleFile = async (entry: FileEntry, idx: number): Promise<'done' | 'duplicate' | 'error'> => {
@@ -101,14 +149,12 @@ export default function UploadPage() {
       setFileEntries(prev => prev.map((e, i) => i === idx ? { ...e, status, detail } : e))
     }
 
-    const freshSteps = makeSteps()
-    setSteps(freshSteps)
+    setSteps(makeSteps())
     setCurrentFileIdx(idx)
     setStatus('processing')
     const { file } = entry
 
     try {
-      // Step 1: Validate
       updateStep('validate', 'active')
       const validation = validateFile(file)
       if (!validation.valid) throw new Error(validation.error)
@@ -117,7 +163,6 @@ export default function UploadPage() {
       await new Promise(r => setTimeout(r, 100))
       updateStep('validate', 'done', `${formatBytes(file.size)} ✓`)
 
-      // Step 2: Compress
       updateStep('compress', 'active')
       const compression = await optimizeUploadFile(file)
       const uploadFile = compression.optimizedFile
@@ -128,12 +173,10 @@ export default function UploadPage() {
         updateStep('compress', 'done', `${formatBytes(compression.optimizedSize)}`)
       }
 
-      // Step 3: Hash
       updateStep('hash', 'active')
       const hash = await sha256(uploadFile)
       updateStep('hash', 'done')
 
-      // Step 4: Duplicate check
       updateStep('duplicate', 'active')
       await new Promise(r => setTimeout(r, 80))
       const existingPaper    = papers.find(p => p.sha256 === hash)
@@ -148,7 +191,6 @@ export default function UploadPage() {
       }
       updateStep('duplicate', 'done', 'No duplicates ✓')
 
-      // Step 5: Upload to storage
       updateStep('upload', 'active')
       const bucket  = (materialType === 'paper' || materialType === 'lab_paper') ? 'papers' : 'resources'
       const cdnFile = new File([uploadFile], `${hash.slice(0, 12)}_${uploadFile.name}`, { type: uploadFile.type })
@@ -160,7 +202,6 @@ export default function UploadPage() {
       }
       updateStep('upload', 'done', 'Upload complete ✓')
 
-      // Step 6: Save to DB
       updateStep('meta', 'active')
       const isLab        = materialType === 'lab_paper' || materialType === 'lab_manual'
       const targetSubject = findOrCreateSubject(subject, branch, 'sem1', isLab ? 'lab' : 'theory')
@@ -170,43 +211,33 @@ export default function UploadPage() {
 
       if (materialType === 'paper' || materialType === 'lab_paper') {
         const paperData = {
-          id: newId,
-          subject_id: targetSubject.id,
-          subject_name: targetSubject.name,
+          id: newId, subject_id: targetSubject.id, subject_name: targetSubject.name,
           branch_code: branchObj?.code || 'CSE',
           exam_type: (examType || 'midterm') as any,
           exam_label: EXAM_TYPES[examType] || 'Mid Term',
           academic_year: academicYear,
           semester_number: parseInt(targetSubject.semester_id.replace('sem', '')) || 1,
-          file_url: cdnUrl,
-          uploaded_by: getAnonId(),
+          file_url: cdnUrl, uploaded_by: getAnonId(),
           verification_status: 'verified' as const,
-          file_size: uploadFile.size,
-          sha256: hash,
+          file_size: uploadFile.size, sha256: hash,
         }
         await syncPaperToCloud(paperData)
         addPaper(paperData)
       } else {
         const resourceData = {
-          id: newId,
-          subject_id: targetSubject.id,
-          subject_name: targetSubject.name,
+          id: newId, subject_id: targetSubject.id, subject_name: targetSubject.name,
           branch_code: branchObj?.code || 'CSE',
           type: (materialType || 'notes') as any,
-          title: autoTitle,
-          description: description || 'Uploaded study resource',
-          file_url: cdnUrl,
-          uploaded_by: getAnonId(),
+          title: autoTitle, description: description || 'Uploaded study resource',
+          file_url: cdnUrl, uploaded_by: getAnonId(),
           verification_status: 'verified' as const,
-          academic_year: academicYear,
-          sha256: hash,
+          academic_year: academicYear, sha256: hash,
         }
         await syncResourceToCloud(resourceData)
         addResource(resourceData)
       }
       updateStep('meta', 'done', 'Saved ✓')
 
-      // Step 7: Publish
       updateStep('publish', 'active')
       incrementUploadCount()
       updateStep('publish', 'done', 'Live & visible to all students ✓')
@@ -245,6 +276,7 @@ export default function UploadPage() {
   }
 
   const handleReset = () => {
+    fileEntries.forEach(e => { if (e.previewUrl) URL.revokeObjectURL(e.previewUrl) })
     setFileEntries([]); setDescription(''); setGlobalError('')
     setSteps(makeSteps()); setDoneCount(0); setCurrentFileIdx(0)
   }
@@ -261,22 +293,21 @@ export default function UploadPage() {
             width: 72, height: 72, borderRadius: '50%',
             background: 'linear-gradient(135deg, #22c55e, #16a34a)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 1.25rem',
-            boxShadow: '0 0 0 12px rgba(34,197,94,0.15)',
+            margin: '0 auto 1.25rem', boxShadow: '0 0 0 12px rgba(34,197,94,0.15)',
           }}>
             <CheckCircle size={36} color="white" />
           </div>
           <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
             {doneCount === fileEntries.length
-              ? `All ${doneCount} file${doneCount > 1 ? 's' : ''} uploaded!`
-              : `${doneCount} of ${fileEntries.length} file${fileEntries.length > 1 ? 's' : ''} uploaded`}
+              ? `${doneCount === 1 ? 'File uploaded' : `All ${doneCount} files uploaded`}!`
+              : `${doneCount} of ${fileEntries.length} files uploaded`}
           </h1>
           <p style={{ color: 'var(--text-muted)', marginBottom: errorCount ? '0.75rem' : '2rem', lineHeight: 1.7 }}>
-            Your materials are now live and available to all SR University students. 🎉
+            Your material is now live and available to all SR University students. 🎉
           </p>
           {errorCount > 0 && (
             <p style={{ color: 'var(--color-error-500)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              {errorCount} file{errorCount > 1 ? 's' : ''} failed — you can try uploading again.
+              {errorCount} file{errorCount > 1 ? 's' : ''} failed — you can retry uploading them.
             </p>
           )}
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -301,7 +332,7 @@ export default function UploadPage() {
 
       {!rateLimit.allowed && (
         <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
-          Upload limit reached ({rateLimit.remaining} remaining). Resets at {new Date(rateLimit.resetAt).toLocaleTimeString()}.
+          Upload limit reached. Resets at {new Date(rateLimit.resetAt).toLocaleTimeString()}.
         </div>
       )}
 
@@ -311,19 +342,13 @@ export default function UploadPage() {
           <div className="label" style={{ marginBottom: '0.75rem' }}>Material Type</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.5rem' }}>
             {MATERIAL_TYPES.map(mt => (
-              <button
-                key={mt.value}
-                type="button"
-                onClick={() => setMaterialType(mt.value)}
-                style={{
-                  padding: '0.75rem',
-                  borderRadius: 'var(--radius-md)',
-                  border: `2px solid ${materialType === mt.value ? 'var(--color-primary-500)' : 'var(--border-base)'}`,
-                  background: materialType === mt.value ? 'var(--color-primary-50)' : 'transparent',
-                  cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-sans)',
-                  transition: 'all var(--transition-fast)',
-                }}
-              >
+              <button key={mt.value} type="button" onClick={() => setMaterialType(mt.value)} style={{
+                padding: '0.75rem', borderRadius: 'var(--radius-md)',
+                border: `2px solid ${materialType === mt.value ? 'var(--color-primary-500)' : 'var(--border-base)'}`,
+                background: materialType === mt.value ? 'var(--color-primary-50)' : 'transparent',
+                cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-sans)',
+                transition: 'all var(--transition-fast)',
+              }}>
                 <div style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '0.125rem' }}>{mt.label}</div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{mt.desc}</div>
               </button>
@@ -341,30 +366,20 @@ export default function UploadPage() {
                 {BRANCHES.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
               </select>
             </div>
-
             <div className="form-group">
               <label className="label" htmlFor="up-subject">Subject Name *</label>
-              <input
-                id="up-subject"
-                className="input"
-                list="subject-suggestions"
-                value={subject}
-                onChange={e => setSubject(e.target.value)}
-                placeholder="Type or select subject…"
-                required
-              />
+              <input id="up-subject" className="input" list="subject-suggestions" value={subject}
+                onChange={e => setSubject(e.target.value)} placeholder="Type or select subject…" required />
               <datalist id="subject-suggestions">
                 {filteredSubjects.map(s => <option key={s.id} value={s.name} />)}
               </datalist>
             </div>
-
             <div className="form-group">
               <label className="label" htmlFor="up-year">Academic Year</label>
               <select id="up-year" className="input select" value={academicYear} onChange={e => setAcademicYear(e.target.value)}>
                 {ACADEMIC_YEARS.map(y => <option key={y.id} value={y.id}>{y.label}</option>)}
               </select>
             </div>
-
             {(materialType === 'paper' || materialType === 'lab_paper') && (
               <div className="form-group">
                 <label className="label" htmlFor="up-exam-type">Exam Type</label>
@@ -373,57 +388,43 @@ export default function UploadPage() {
                 </select>
               </div>
             )}
-
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label className="label" htmlFor="up-desc">Description (optional)</label>
-              <textarea
-                id="up-desc"
-                className="input"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                rows={2}
-                placeholder="Any additional notes about this material…"
-                style={{ resize: 'vertical' }}
-              />
+              <textarea id="up-desc" className="input" value={description} onChange={e => setDescription(e.target.value)}
+                rows={2} placeholder="Any additional notes about this material…" style={{ resize: 'vertical' }} />
             </div>
           </div>
         </div>
 
-        {/* Multi-file drop zone */}
+        {/* File drop zone */}
         <div className="card" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.625rem' }}>
-            <div className="label">
-              Files{fileEntries.length > 0 ? ` (${fileEntries.length} selected)` : ' *'}
-            </div>
+            <div className="label">Files{fileEntries.length > 0 ? ` (${fileEntries.length} selected)` : ' *'}</div>
             {fileEntries.length > 0 && !uploading && (
-              <button
-                type="button"
+              <button type="button"
                 style={{ fontSize: '0.78rem', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
-                onClick={() => document.getElementById('file-input')?.click()}
-              >
+                onClick={() => document.getElementById('file-input')?.click()}>
                 + Add more
               </button>
             )}
           </div>
 
-          {/* Drop zone — always visible */}
           <div
             onDragOver={e => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
+            onClick={() => document.getElementById('file-input')?.click()}
             style={{
               border: `2px dashed ${dragOver ? 'var(--color-primary-400)' : 'var(--border-base)'}`,
               borderRadius: 'var(--radius-lg)',
-              padding: fileEntries.length > 0 ? '1rem 1.5rem' : '2.5rem 1.5rem',
+              padding: fileEntries.length > 0 ? '0.875rem 1.5rem' : '2.5rem 1.5rem',
               textAlign: 'center',
               background: dragOver ? 'var(--color-primary-50)' : 'var(--bg-muted)',
-              transition: 'all var(--transition-fast)',
-              cursor: 'pointer',
+              transition: 'all var(--transition-fast)', cursor: 'pointer',
             }}
-            onClick={() => document.getElementById('file-input')?.click()}
           >
-            <Files size={fileEntries.length > 0 ? 20 : 32} style={{ color: 'var(--text-subtle)', margin: '0 auto 0.5rem' }} />
-            <div style={{ fontWeight: 600, fontSize: fileEntries.length > 0 ? '0.85rem' : '1rem', marginBottom: '0.2rem' }}>
+            <Files size={fileEntries.length > 0 ? 18 : 32} style={{ color: 'var(--text-subtle)', margin: '0 auto 0.5rem' }} />
+            <div style={{ fontWeight: 600, fontSize: fileEntries.length > 0 ? '0.82rem' : '1rem', marginBottom: '0.2rem' }}>
               {fileEntries.length > 0 ? 'Drop more files or click to add' : 'Drop files here or click to browse'}
             </div>
             {fileEntries.length === 0 && (
@@ -431,86 +432,169 @@ export default function UploadPage() {
                 PDF, JPEG, PNG, WebP, Word · Max 50 MB each · Multiple files supported
               </div>
             )}
-            <input
-              id="file-input"
-              type="file"
-              multiple
-              accept={ALLOWED_MIMES.join(',')}
-              onChange={handleFileInput}
-              style={{ display: 'none' }}
-            />
+            <input id="file-input" type="file" multiple accept={ALLOWED_MIMES.join(',')}
+              onChange={handleFileInput} style={{ display: 'none' }} />
           </div>
 
-          {/* File list */}
-          {fileEntries.length > 0 && (
-            <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {fileEntries.map((entry, i) => {
-                const isCurrentlyProcessing = uploading && i === currentFileIdx && entry.status === 'processing'
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '0.625rem',
-                      padding: '0.625rem 0.875rem',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid',
-                      borderColor: entry.status === 'done'      ? 'var(--color-success-300)'
-                                 : entry.status === 'duplicate'  ? 'var(--color-warning-300, #fbbf24)'
-                                 : entry.status === 'error'      ? 'var(--color-error-300)'
-                                 : entry.status === 'processing' ? 'var(--color-primary-300)'
-                                 : 'var(--border-base)',
-                      background: entry.status === 'done'       ? 'var(--color-success-50)'
-                                : entry.status === 'duplicate'   ? '#fffbeb'
-                                : entry.status === 'error'       ? 'var(--color-error-50)'
-                                : entry.status === 'processing'  ? 'var(--color-primary-50)'
-                                : 'transparent',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    {/* Status icon */}
-                    <div style={{ flexShrink: 0 }}>
-                      {entry.status === 'done'       && <CheckCircle size={15} style={{ color: 'var(--color-success-600)' }} />}
-                      {entry.status === 'duplicate'  && <CheckCircle size={15} style={{ color: '#d97706' }} />}
-                      {entry.status === 'error'      && <AlertCircle size={15} style={{ color: 'var(--color-error-500)' }} />}
-                      {entry.status === 'processing' && <Loader size={15} style={{ animation: 'spin 1s linear infinite', color: 'var(--color-primary-500)' }} />}
-                      {entry.status === 'pending'    && <div style={{ width: 15, height: 15, borderRadius: '50%', border: '2px solid var(--color-neutral-300)' }} />}
+          {/* ── Combine into PDF panel (shown when multiple images selected) ── */}
+          {allImages && !uploading && (
+            <div style={{
+              marginTop: '0.875rem',
+              padding: '1rem',
+              borderRadius: 'var(--radius-md)',
+              border: '2px solid var(--color-primary-300)',
+              background: 'var(--color-primary-50)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <Layers size={16} style={{ color: 'var(--color-primary-600)' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--color-primary-700)' }}>
+                  Combine into one PDF?
+                </span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                  e.g. front + back of the same paper
+                </span>
+              </div>
+
+              {/* Scrollable page-order preview */}
+              <div style={{
+                display: 'flex', gap: '0.625rem', overflowX: 'auto',
+                paddingBottom: '0.5rem',
+                scrollbarWidth: 'thin',
+              }}>
+                {fileEntries.map((entry, i) => (
+                  <div key={i} style={{ flexShrink: 0, width: 80, textAlign: 'center' }}>
+                    {/* Preview thumbnail */}
+                    <div style={{
+                      position: 'relative', width: 80, height: 100,
+                      borderRadius: 6, overflow: 'hidden',
+                      border: '2px solid var(--color-primary-200)',
+                      background: '#f0f4ff',
+                    }}>
+                      {entry.previewUrl ? (
+                        <img src={entry.previewUrl} alt={`Page ${i + 1}`}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                          <FileText size={24} style={{ color: 'var(--text-subtle)' }} />
+                        </div>
+                      )}
+                      {/* Page number badge */}
+                      <div style={{
+                        position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
+                        background: 'rgba(0,0,0,0.6)', color: '#fff',
+                        fontSize: '0.65rem', fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                      }}>
+                        pg {i + 1}
+                      </div>
                     </div>
 
-                    {/* File name + detail */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '0.825rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {entry.file.name}
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        {entry.detail
-                          ? entry.detail
-                          : `${formatBytes(entry.file.size)} · ${entry.file.type || 'file'}`}
-                      </div>
-                    </div>
-
-                    {/* Remove button (only when not uploading) */}
-                    {!uploading && entry.status !== 'done' && (
-                      <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeFile(i)}>
-                        <X size={13} />
+                    {/* Reorder + remove controls */}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '0.3rem' }}>
+                      <button type="button" onClick={() => moveFile(i, -1)} disabled={i === 0}
+                        title="Move up" style={{
+                          border: '1px solid var(--border-base)', borderRadius: 4, background: '#fff',
+                          cursor: i === 0 ? 'not-allowed' : 'pointer', padding: '1px 4px', opacity: i === 0 ? 0.4 : 1,
+                        }}>
+                        <ChevronUp size={11} />
                       </button>
-                    )}
+                      <button type="button" onClick={() => moveFile(i, 1)} disabled={i === fileEntries.length - 1}
+                        title="Move down" style={{
+                          border: '1px solid var(--border-base)', borderRadius: 4, background: '#fff',
+                          cursor: i === fileEntries.length - 1 ? 'not-allowed' : 'pointer', padding: '1px 4px',
+                          opacity: i === fileEntries.length - 1 ? 0.4 : 1,
+                        }}>
+                        <ChevronDown size={11} />
+                      </button>
+                      <button type="button" onClick={() => removeFile(i)} title="Remove"
+                        style={{ border: '1px solid var(--color-error-300)', borderRadius: 4, background: '#fff', cursor: 'pointer', padding: '1px 4px' }}>
+                        <X size={11} style={{ color: 'var(--color-error-500)' }} />
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.2rem',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {entry.file.name}
+                    </div>
                   </div>
-                )
-              })}
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleMerge}
+                disabled={merging}
+                style={{ marginTop: '0.75rem', width: '100%' }}
+              >
+                {merging
+                  ? <><Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> Combining pages…</>
+                  : <><Layers size={14} /> Combine {fileEntries.length} images into one PDF</>}
+              </button>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.4rem' }}>
+                Or skip this and upload {fileEntries.length} files separately using the button below.
+              </p>
+            </div>
+          )}
+
+          {/* File list (when not in image-merge mode, or after merge) */}
+          {fileEntries.length > 0 && (!allImages || uploading) && (
+            <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {fileEntries.map((entry, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.625rem',
+                  padding: '0.625rem 0.875rem', borderRadius: 'var(--radius-md)',
+                  border: '1px solid',
+                  borderColor: entry.status === 'done' ? 'var(--color-success-300)'
+                    : entry.status === 'duplicate' ? '#fbbf24'
+                    : entry.status === 'error' ? 'var(--color-error-300)'
+                    : entry.status === 'processing' ? 'var(--color-primary-300)'
+                    : 'var(--border-base)',
+                  background: entry.status === 'done' ? 'var(--color-success-50)'
+                    : entry.status === 'duplicate' ? '#fffbeb'
+                    : entry.status === 'error' ? 'var(--color-error-50)'
+                    : entry.status === 'processing' ? 'var(--color-primary-50)'
+                    : 'transparent',
+                  transition: 'all 0.2s',
+                }}>
+                  <div style={{ flexShrink: 0 }}>
+                    {entry.status === 'done'       && <CheckCircle size={15} style={{ color: 'var(--color-success-600)' }} />}
+                    {entry.status === 'duplicate'  && <CheckCircle size={15} style={{ color: '#d97706' }} />}
+                    {entry.status === 'error'      && <AlertCircle size={15} style={{ color: 'var(--color-error-500)' }} />}
+                    {entry.status === 'processing' && <Loader size={15} style={{ animation: 'spin 1s linear infinite', color: 'var(--color-primary-500)' }} />}
+                    {entry.status === 'pending'    && <div style={{ width: 15, height: 15, borderRadius: '50%', border: '2px solid var(--color-neutral-300)' }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.825rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {entry.file.name}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {entry.detail || `${formatBytes(entry.file.size)} · ${entry.file.type || 'file'}`}
+                    </div>
+                  </div>
+                  {!uploading && entry.status !== 'done' && (
+                    <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeFile(i)}>
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Upload progress (current file steps) */}
+        {/* Upload progress */}
         {uploading && (
           <div className="card" style={{ padding: '1.25rem' }}>
             <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.625rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
-              Processing file {currentFileIdx + 1} of {fileEntries.length}…
+              {fileEntries.length === 1
+                ? 'Processing your upload…'
+                : `Processing file ${currentFileIdx + 1} of ${fileEntries.length}…`}
             </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {fileEntries[currentFileIdx]?.file.name}
-            </div>
+            {fileEntries.length > 1 && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {fileEntries[currentFileIdx]?.file.name}
+              </div>
+            )}
             {steps.map(step => (
               <div key={step.id} className={`upload-step ${step.status}`}>
                 {step.status === 'done'   ? <CheckCircle size={13} style={{ color: 'var(--color-success-600)', flexShrink: 0 }} /> :
@@ -524,7 +608,6 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Error */}
         {globalError && (
           <div className="alert alert-error" style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
             <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -532,7 +615,6 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Disclaimer */}
         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5, margin: '0' }}>
           By uploading you confirm this is for educational use and agree to our{' '}
           <a href="/terms" style={{ color: 'var(--color-primary-600)', textDecoration: 'underline' }}>Terms of Use</a>
@@ -540,24 +622,19 @@ export default function UploadPage() {
           <a href="/privacy" style={{ color: 'var(--color-primary-600)', textDecoration: 'underline' }}>Privacy Policy</a>.
         </p>
 
-        <button
-          type="submit"
-          className="btn btn-primary btn-lg"
-          disabled={uploading || fileEntries.length === 0 || !rateLimit.allowed}
-        >
+        <button type="submit" className="btn btn-primary btn-lg"
+          disabled={uploading || merging || fileEntries.length === 0 || !rateLimit.allowed}>
           {uploading ? (
             <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Uploading…</>
           ) : fileEntries.length > 1 ? (
-            <><Upload size={16} /> Upload {fileEntries.length} Files</>
+            <><Upload size={16} /> Upload {fileEntries.length} Files Separately</>
           ) : (
             <><Upload size={16} /> Submit Upload</>
           )}
         </button>
       </form>
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
