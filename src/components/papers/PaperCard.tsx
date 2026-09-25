@@ -1,5 +1,6 @@
+import React, { memo } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText, Download, Eye } from 'lucide-react'
+import { Download, Eye } from 'lucide-react'
 import type { Paper } from '@/data/catalog'
 import { EXAM_TYPES } from '@/data/catalog'
 import { formatBytes } from '@/lib/fileUtils'
@@ -16,13 +17,11 @@ const EXAM_TYPE_COLORS: Record<string, { badge: string; bg: string; color: strin
   supplementary: { badge: 'badge-amber',   bg: 'var(--color-accent-50)',   color: 'var(--color-accent-600)' },
 }
 
-export function PaperCard({ paper }: PaperCardProps) {
+export const PaperCard = memo(function PaperCard({ paper }: PaperCardProps) {
   const colors = EXAM_TYPE_COLORS[paper.exam_type] || EXAM_TYPE_COLORS.midterm
 
   return (
     <div className="card card-hover" style={{ padding: '1.125rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', overflow: 'hidden' }}>
-
-
       {/* Type + year row */}
       <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
         <span className={`badge ${colors.badge}`}>{EXAM_TYPES[paper.exam_type] || paper.exam_label}</span>
@@ -68,4 +67,4 @@ export function PaperCard({ paper }: PaperCardProps) {
       </div>
     </div>
   )
-}
+})
