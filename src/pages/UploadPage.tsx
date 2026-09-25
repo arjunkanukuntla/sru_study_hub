@@ -432,7 +432,7 @@ export default function UploadPage() {
           <div className="card" style={{ padding: '1.25rem' }}>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} />
-              Uploading to Supabase Cloud…
+              Processing your upload…
             </div>
             {steps.map(step => (
               <div key={step.id} className={`upload-step ${step.status}`}>
@@ -456,12 +456,19 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Info */}
-        <div className="alert alert-info" style={{ fontSize: '0.8rem' }}>
-          📌 By uploading, you confirm this material is intended for educational use and you agree to our{' '}
-          <a href="/terms" style={{ color: 'var(--color-primary-600)', textDecoration: 'underline' }}>Terms of Use</a>.
-          Files you upload will be visible to all SR University students.
-        </div>
+        {/* Disclaimer note */}
+        <p style={{
+          fontSize: '0.78rem',
+          color: 'var(--text-muted)',
+          textAlign: 'center',
+          lineHeight: 1.5,
+          margin: '0',
+        }}>
+          By uploading you confirm this is for educational use and agree to our{' '}
+          <a href="/terms" style={{ color: 'var(--color-primary-600)', textDecoration: 'underline' }}>Terms of Use</a>
+          {' '}and{' '}
+          <a href="/privacy" style={{ color: 'var(--color-primary-600)', textDecoration: 'underline' }}>Privacy Policy</a>.
+        </p>
 
         <button
           type="submit"
