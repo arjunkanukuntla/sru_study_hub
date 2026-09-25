@@ -5,7 +5,7 @@ import { BRANCHES, getFrequencyLabel, getFrequencyClass, getFrequencyEmoji } fro
 import { PaperCard } from '@/components/papers/PaperCard'
 import { useAppStore } from '@/lib/store'
 
-const TABS = ['Overview', 'Papers', 'Topics', 'Resources', 'Analytics'] as const
+const TABS = ['Overview', 'Papers', 'Topics', 'Resources'] as const
 type Tab = typeof TABS[number]
 
 export default function SubjectDetailPage() {
@@ -139,7 +139,6 @@ export default function SubjectDetailPage() {
             {[
               { label: 'View Papers', to: `/subjects/${id}`, tab: 'Papers', icon: FileText, color: 'var(--color-primary-600)', bg: 'var(--color-primary-50)' },
               { label: 'Study Resources', to: `/subjects/${id}`, tab: 'Resources', icon: Library, color: '#059669', bg: '#ecfdf5' },
-              { label: 'Exam Analytics', to: `/subjects/${id}`, tab: 'Analytics', icon: BarChart3, color: '#d97706', bg: '#fffbeb' },
               { label: 'Study Plan', to: '/study', icon: Brain, color: '#e11d48', bg: '#fff1f2' },
             ].map(({ label, to, tab, icon: Icon, color, bg }) => (
               <button
@@ -296,32 +295,6 @@ export default function SubjectDetailPage() {
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'Analytics' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div className="alert alert-warning">
-            <div style={{ fontSize: '0.8125rem' }}>
-              Analytics are calculated from uploaded papers only. They represent historical frequency, not exam predictions.
-            </div>
-          </div>
-          {subjectPapers.length < 2 ? (
-            <div className="card">
-              <div className="empty-state">
-                <div className="empty-state-icon"><BarChart3 size={24} /></div>
-                <div className="empty-state-title">Not enough papers yet</div>
-                <div className="empty-state-desc">
-                  Upload more previous papers to generate meaningful analytics. Minimum 2 papers needed.
-                </div>
-                <Link to="/upload" className="btn btn-primary btn-sm">Upload Paper</Link>
-              </div>
-            </div>
-          ) : (
-            <Link to={`/analytics?subject=${id}`} className="btn btn-primary">
-              <BarChart3 size={16} /> View Full Analytics
-            </Link>
           )}
         </div>
       )}

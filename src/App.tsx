@@ -17,7 +17,6 @@ const PaperDetailPage   = lazy(() => import('@/pages/PaperDetailPage'))
 const LabsPage          = lazy(() => import('@/pages/LabsPage'))
 const LabDetailPage     = lazy(() => import('@/pages/LabDetailPage'))
 const ResourcesPage     = lazy(() => import('@/pages/ResourcesPage'))
-const AnalyticsPage     = lazy(() => import('@/pages/AnalyticsPage'))
 const StudyPage         = lazy(() => import('@/pages/StudyPage'))
 const SearchPage        = lazy(() => import('@/pages/SearchPage'))
 const UploadPage        = lazy(() => import('@/pages/UploadPage'))
@@ -106,7 +105,6 @@ export default function App() {
               <Route path="/labs"         element={<LabsPage />} />
               <Route path="/labs/:id"     element={<LabDetailPage />} />
               <Route path="/resources"    element={<ResourcesPage />} />
-              <Route path="/analytics"    element={<AnalyticsPage />} />
               <Route path="/study"        element={<StudyPage />} />
               <Route path="/search"       element={<SearchPage />} />
               <Route path="/upload"       element={<UploadPage />} />

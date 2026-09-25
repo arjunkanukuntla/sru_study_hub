@@ -11,7 +11,6 @@ const NAV_ITEMS = [
   { to: '/papers',    label: 'Papers',    icon: FileText },
   { to: '/labs',      label: 'Labs',      icon: FlaskConical },
   { to: '/resources', label: 'Resources', icon: Library },
-  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/study',     label: 'Study',     icon: Brain },
   { to: '/search',    label: 'Search',    icon: Search },
 ]

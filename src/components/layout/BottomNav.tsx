@@ -44,7 +44,6 @@ export function BottomNav() {
           {[
             { to: '/labs',      label: 'Labs',      icon: FlaskConical, color: '#7c3aed' },
             { to: '/resources', label: 'Resources',  icon: Library,      color: '#059669' },
-            { to: '/analytics', label: 'Analytics',  icon: BarChart3,    color: '#d97706' },
             { to: '/search',    label: 'Search',     icon: Search,       color: '#0891b2' },
             { to: '/my-study',  label: 'My Study',   icon: Star,         color: '#eab308' },
             { to: '/upload',    label: 'Upload',     icon: Upload,       color: 'var(--color-primary-600)' },

@@ -31,14 +31,6 @@ const CATEGORY_CARDS = [
     bg: '#ecfdf5',
   },
   {
-    title: 'Exam Insights',
-    desc: 'Topic frequency, weightage and repeated questions.',
-    to: '/analytics',
-    icon: BarChart3,
-    color: '#d97706',
-    bg: '#fffbeb',
-  },
-  {
     title: 'Study Prep',
     desc: 'Prioritized topics and last-minute preparation plans.',
     to: '/study',
@@ -63,7 +55,6 @@ export default function HomePage() {
     { value: String(subjects.length),  label: 'Subjects',  icon: BookOpen },
     { value: String(papers.length),    label: 'Papers',    icon: FileText },
     { value: String(resources.length), label: 'Resources', icon: Library },
-    { value: '100%',                   label: 'Free',      icon: Star },
   ]
 
   return (
@@ -267,8 +258,7 @@ export default function HomePage() {
       <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
         <div>
           <strong>About SRU Study Hub</strong><br />
-          This is a student-built utility for SR University. Analytics show historical frequency of topics in uploaded papers — not predictions of future exams.
-          All uploaded content is community-contributed and does not represent official SR University documents unless verified.
+          This is a student-built utility for SR University. All uploaded content is community-contributed and does not represent official SR University documents unless verified.
         </div>
       </div>
     </div>
