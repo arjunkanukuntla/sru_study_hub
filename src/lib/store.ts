@@ -31,6 +31,8 @@ interface AppState {
   addResource: (resource: Omit<Resource, 'id'> & { id?: string }) => Resource
   addSubject: (subject: Omit<Subject, 'id'> & { id?: string }) => Subject
   findOrCreateSubject: (name: string, branchId: string, semesterId?: string, type?: 'theory' | 'lab' | 'both') => Subject
+  deletePaper: (id: string) => void
+  deleteResource: (id: string) => void
 }
 
 let realtimeSubscribed = false
@@ -77,18 +79,6 @@ export const useAppStore = create<AppState>()(
               return localId && localId !== item.subject_id ? { ...item, subject_id: localId } : item
             }
 
-            // Papers: cloud only (real CDN URLs), plus local papers not yet in cloud
-            const cloudPaperIds = new Set(cloud.papers.map(p => p.id))
-            const localRealPapers = state.papers.filter(
-              p => !cloudPaperIds.has(p.id) && p.file_url && !p.file_url.startsWith('data:')
-            )
-
-            // Resources: same strategy
-            const cloudResIds = new Set(cloud.resources.map(r => r.id))
-            const localRealResources = state.resources.filter(
-              r => !cloudResIds.has(r.id) && r.file_url && !r.file_url.startsWith('data:')
-            )
-
             // ── Deduplicate by sha256 (safety net in case DB has duplicate rows) ──
             const dedupBySha256 = <T extends { sha256?: string }>(items: T[]): T[] => {
               const seen = new Set<string>()
@@ -101,11 +91,9 @@ export const useAppStore = create<AppState>()(
             }
 
             // Remap subject_ids then dedup
-            const remappedCloudPapers    = cloud.papers.map(remapSubjectId)
-            const remappedCloudResources = cloud.resources.map(remapSubjectId)
-
-            const allPapers    = dedupBySha256([...remappedCloudPapers,    ...localRealPapers])
-            const allResources = dedupBySha256([...remappedCloudResources,  ...localRealResources])
+            // Cloud is authoritative: do not merge stale deleted items from local state
+            const allPapers    = dedupBySha256(cloud.papers.map(remapSubjectId))
+            const allResources = dedupBySha256(cloud.resources.map(remapSubjectId))
 
             return {
               subjects: mergedSubjects,
@@ -269,6 +257,14 @@ export const useAppStore = create<AppState>()(
         set((state) => ({ subjects: [...state.subjects, newSub] }))
         syncSubjectToCloud(newSub)
         return newSub
+      },
+
+      deletePaper: (id: string) => {
+        set((state) => ({ papers: state.papers.filter(p => p.id !== id) }))
+      },
+
+      deleteResource: (id: string) => {
+        set((state) => ({ resources: state.resources.filter(r => r.id !== id) }))
       },
     }),
     {

@@ -57,17 +57,13 @@ export default function AboutPage() {
         <h2 style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>Features</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
           {[
-            { icon: '📄', title: 'Previous Papers', desc: 'Mid-term and end-term papers organized by subject and year' },
-            { icon: '🧪', title: 'Lab Resources', desc: 'Lab papers, experiments, viva questions and manuals' },
-            { icon: '📚', title: 'Study Resources', desc: 'Syllabus, notes and question banks' },
-            { icon: '📊', title: 'Exam Analytics', desc: 'Historical topic frequency from uploaded papers' },
-            { icon: '🎯', title: 'Study Planner', desc: 'Personalized study plans based on available time' },
-            { icon: '🔍', title: 'Smart Search', desc: 'Search across all subjects, papers and resources' },
-            { icon: '⬆️', title: 'Community Upload', desc: 'Students contribute papers — no login required' },
-            { icon: '🔒', title: 'Privacy First', desc: 'No accounts, no tracking — anonymous IDs only' },
-          ].map(({ icon, title, desc }) => (
+            { icon: FileText, title: 'Previous Papers', desc: 'Mid-term and end-term papers organized by subject and year' },
+            { icon: BookOpen, title: 'Lab Resources', desc: 'Lab papers, experiments, viva questions and manuals' },
+            { icon: GraduationCap, title: 'Study Resources', desc: 'Syllabus, notes and question banks' },
+            { icon: Upload, title: 'Exam Analytics', desc: 'Historical topic frequency from uploaded papers' },
+          ].map(({ icon: Icon, title, desc }) => (
             <div key={title} style={{ padding: '0.875rem', background: 'var(--bg-muted)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ fontSize: '1.375rem', marginBottom: '0.375rem' }}>{icon}</div>
+              <div style={{ color: 'var(--color-primary-600)', marginBottom: '0.375rem' }}><Icon size={20} /></div>
               <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.2rem' }}>{title}</div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{desc}</div>
             </div>

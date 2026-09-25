@@ -1,28 +1,32 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Analytics } from '@vercel/analytics/react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { getAnonId } from '@/lib/anonId'
 import { useAppStore } from '@/lib/store'
+import { fetchSiteSettings, isLocalEnvironment, type SiteSettings } from '@/lib/adminUtils'
 
 // Lazy load all pages for optimal bundle splitting
-const HomePage         = lazy(() => import('@/pages/HomePage'))
-const SubjectsPage     = lazy(() => import('@/pages/SubjectsPage'))
-const SubjectDetailPage = lazy(() => import('@/pages/SubjectDetailPage'))
-const PapersPage       = lazy(() => import('@/pages/PapersPage'))
-const PaperDetailPage  = lazy(() => import('@/pages/PaperDetailPage'))
-const LabsPage         = lazy(() => import('@/pages/LabsPage'))
-const LabDetailPage    = lazy(() => import('@/pages/LabDetailPage'))
-const ResourcesPage    = lazy(() => import('@/pages/ResourcesPage'))
-const AnalyticsPage    = lazy(() => import('@/pages/AnalyticsPage'))
-const StudyPage        = lazy(() => import('@/pages/StudyPage'))
-const SearchPage       = lazy(() => import('@/pages/SearchPage'))
-const UploadPage       = lazy(() => import('@/pages/UploadPage'))
-const MyStudyPage      = lazy(() => import('@/pages/MyStudyPage'))
-const AboutPage        = lazy(() => import('@/pages/AboutPage'))
-const TermsPage        = lazy(() => import('@/pages/TermsPage'))
-const PrivacyPage      = lazy(() => import('@/pages/PrivacyPage'))
+const HomePage          = lazy(() => import('@/pages/HomePage'))
+const SubjectsPage      = lazy(() => import('@/pages/SubjectsPage'))
+const SubjectDetailPage  = lazy(() => import('@/pages/SubjectDetailPage'))
+const PapersPage        = lazy(() => import('@/pages/PapersPage'))
+const PaperDetailPage   = lazy(() => import('@/pages/PaperDetailPage'))
+const LabsPage          = lazy(() => import('@/pages/LabsPage'))
+const LabDetailPage     = lazy(() => import('@/pages/LabDetailPage'))
+const ResourcesPage     = lazy(() => import('@/pages/ResourcesPage'))
+const AnalyticsPage     = lazy(() => import('@/pages/AnalyticsPage'))
+const StudyPage         = lazy(() => import('@/pages/StudyPage'))
+const SearchPage        = lazy(() => import('@/pages/SearchPage'))
+const UploadPage        = lazy(() => import('@/pages/UploadPage'))
+const MyStudyPage       = lazy(() => import('@/pages/MyStudyPage'))
+const AboutPage         = lazy(() => import('@/pages/AboutPage'))
+const TermsPage         = lazy(() => import('@/pages/TermsPage'))
+const PrivacyPage       = lazy(() => import('@/pages/PrivacyPage'))
+const AdminLogin        = lazy(() => import('@/pages/admin/AdminLogin'))
+const AdminDashboard    = lazy(() => import('@/pages/admin/AdminDashboard'))
+const MaintenancePage  = lazy(() => import('@/pages/MaintenancePage'))
 
 // React Query client — aggressive caching, minimal refetching
 const queryClient = new QueryClient({
@@ -60,16 +64,38 @@ function PageLoader() {
 
 export default function App() {
   const initCloudSync = useAppStore(state => state.initCloudSync)
+  const [settings, setSettings] = useState<SiteSettings | null>(null)
+  const isLocal = isLocalEnvironment()
 
   useEffect(() => {
     initCloudSync()
+    fetchSiteSettings().then(s => setSettings(s)).catch(() => {})
   }, [initCloudSync])
+
+  const isAdminRoute = window.location.pathname.startsWith('/admin')
+
+  if (settings?.maintenance_mode && !isAdminRoute) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <MaintenancePage message={settings.maintenance_message} />
+      </Suspense>
+    )
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Suspense fallback={<PageLoader />}>
           <Routes>
+            {/* Admin Routes (Local Environment Only) */}
+            {isLocal && (
+              <>
+                <Route path="/admin"           element={<AdminLogin />} />
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              </>
+            )}
+
+            {/* Public Routes (within main layout) */}
             <Route element={<RootLayout />}>
               <Route path="/"             element={<HomePage />} />
               <Route path="/subjects"     element={<SubjectsPage />} />

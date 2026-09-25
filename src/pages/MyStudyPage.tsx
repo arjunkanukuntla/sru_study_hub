@@ -101,7 +101,7 @@ export default function MyStudyPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
             {myUploadedPapers.map(p => (
               <div key={p.id} className="card" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <span className="badge badge-blue">📄 {p.exam_label}</span>
+                <span className="badge badge-blue">{p.exam_label}</span>
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{p.subject_name}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.branch_code} · {p.academic_year}</div>
@@ -111,7 +111,7 @@ export default function MyStudyPage() {
             ))}
             {myUploadedResources.map(r => (
               <div key={r.id} className="card" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <span className="badge badge-blue">📚 {r.type}</span>
+                <span className="badge badge-blue">{r.type}</span>
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{r.title}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.subject_name} · {r.branch_code}</div>

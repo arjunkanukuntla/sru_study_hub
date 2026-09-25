@@ -101,7 +101,7 @@ export default function SubjectDetailPage() {
           {/* Units */}
           <div className="card" style={{ padding: '1.25rem' }}>
             <div className="section-header" style={{ marginBottom: '1rem' }}>
-              <h2 className="section-title">📘 Syllabus Units</h2>
+              <h2 className="section-title">Syllabus Units</h2>
             </div>
             {units.length === 0 ? (
               <div className="empty-state" style={{ padding: '1.5rem' }}>

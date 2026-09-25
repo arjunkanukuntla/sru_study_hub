@@ -10,13 +10,13 @@ import { useAppStore } from '@/lib/store'
 import { uploadFileToStorage, syncPaperToCloud, syncResourceToCloud } from '@/lib/supabaseSync'
 
 const MATERIAL_TYPES = [
-  { value: 'paper',         label: '📄 Previous Paper',  desc: 'Mid-term or end-term question paper' },
-  { value: 'lab_paper',     label: '🧪 Lab Paper',        desc: 'Lab examination paper' },
-  { value: 'syllabus',      label: '📘 Syllabus',         desc: 'Official or student-uploaded syllabus' },
-  { value: 'notes',         label: '📝 Notes',            desc: 'Student notes or study material' },
-  { value: 'question_bank', label: '📋 Question Bank',    desc: 'Compiled question bank' },
-  { value: 'lab_manual',    label: '🔬 Lab Manual',       desc: 'Lab instructions and experiments' },
-  { value: 'other',         label: '📁 Other',            desc: 'Any other useful material' },
+  { value: 'paper',         label: 'Previous Paper',  desc: 'Mid-term or end-term question paper' },
+  { value: 'lab_paper',     label: 'Lab Paper',       desc: 'Lab examination paper' },
+  { value: 'syllabus',      label: 'Syllabus',        desc: 'Official or student-uploaded syllabus' },
+  { value: 'notes',         label: 'Notes',           desc: 'Student notes or study material' },
+  { value: 'question_bank', label: 'Question Bank',   desc: 'Compiled question bank' },
+  { value: 'lab_manual',    label: 'Lab Manual',      desc: 'Lab instructions and experiments' },
+  { value: 'other',         label: 'Other',           desc: 'Any other useful material' },
 ]
 
 type FileStatus = 'pending' | 'processing' | 'done' | 'duplicate' | 'error'
@@ -263,11 +263,32 @@ export default function UploadPage() {
 
     setUploading(true)
     setGlobalError('')
-    let done = 0
 
-    for (let i = 0; i < fileEntries.length; i++) {
-      if (fileEntries[i].status === 'done' || fileEntries[i].status === 'duplicate') continue
-      const result = await uploadSingleFile(fileEntries[i], i)
+    let currentEntries = fileEntries
+
+    // Auto-combine images if multiple images selected (only combine mode)
+    if (fileEntries.length > 1 && allImages) {
+      setMerging(true)
+      try {
+        const autoName = (subject || 'paper').replace(/\s+/g, '-').toLowerCase() + '.pdf'
+        const merged = await mergeImagesToPdf(fileEntries.map(e => e.file), autoName)
+        fileEntries.forEach(e => { if (e.previewUrl) URL.revokeObjectURL(e.previewUrl) })
+        currentEntries = [{ file: merged, status: 'pending' }]
+        setFileEntries(currentEntries)
+      } catch (err) {
+        setGlobalError('Failed to combine images into PDF. Please try again.')
+        setUploading(false)
+        setMerging(false)
+        return
+      } finally {
+        setMerging(false)
+      }
+    }
+
+    let done = 0
+    for (let i = 0; i < currentEntries.length; i++) {
+      if (currentEntries[i].status === 'done' || currentEntries[i].status === 'duplicate') continue
+      const result = await uploadSingleFile(currentEntries[i], i)
       if (result === 'done') done++
     }
 
@@ -436,102 +457,76 @@ export default function UploadPage() {
               onChange={handleFileInput} style={{ display: 'none' }} />
           </div>
 
-          {/* ── Combine into PDF panel (shown when multiple images selected) ── */}
+          {/* Page ordering preview for multiple images (automatically merged into single PDF on submit) */}
           {allImages && !uploading && (
             <div style={{
               marginTop: '0.875rem',
-              padding: '1rem',
+              padding: '0.875rem 1rem',
               borderRadius: 'var(--radius-md)',
-              border: '2px solid var(--color-primary-300)',
+              border: '1px solid var(--color-primary-200)',
               background: 'var(--color-primary-50)',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                <Layers size={16} style={{ color: 'var(--color-primary-600)' }} />
-                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--color-primary-700)' }}>
-                  Combine into one PDF?
-                </span>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                  e.g. front + back of the same paper
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.625rem' }}>
+                <Layers size={15} style={{ color: 'var(--color-primary-600)' }} />
+                <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--color-primary-800)' }}>
+                  {fileEntries.length} pages will be merged into a single PDF document:
                 </span>
               </div>
 
-              {/* Scrollable page-order preview */}
+              {/* Page-order preview thumbnails */}
               <div style={{
                 display: 'flex', gap: '0.625rem', overflowX: 'auto',
-                paddingBottom: '0.5rem',
-                scrollbarWidth: 'thin',
+                paddingBottom: '0.25rem', scrollbarWidth: 'thin',
               }}>
                 {fileEntries.map((entry, i) => (
-                  <div key={i} style={{ flexShrink: 0, width: 80, textAlign: 'center' }}>
-                    {/* Preview thumbnail */}
+                  <div key={i} style={{ flexShrink: 0, width: 75, textAlign: 'center' }}>
                     <div style={{
-                      position: 'relative', width: 80, height: 100,
+                      position: 'relative', width: 75, height: 95,
                       borderRadius: 6, overflow: 'hidden',
-                      border: '2px solid var(--color-primary-200)',
-                      background: '#f0f4ff',
+                      border: '1px solid var(--color-primary-200)',
+                      background: '#fff',
                     }}>
                       {entry.previewUrl ? (
                         <img src={entry.previewUrl} alt={`Page ${i + 1}`}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                          <FileText size={24} style={{ color: 'var(--text-subtle)' }} />
+                          <FileText size={20} style={{ color: 'var(--text-subtle)' }} />
                         </div>
                       )}
-                      {/* Page number badge */}
                       <div style={{
                         position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
-                        background: 'rgba(0,0,0,0.6)', color: '#fff',
-                        fontSize: '0.65rem', fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                        background: 'rgba(0,0,0,0.65)', color: '#fff',
+                        fontSize: '0.62rem', fontWeight: 700, padding: '1px 5px', borderRadius: 3,
                       }}>
                         pg {i + 1}
                       </div>
                     </div>
 
-                    {/* Reorder + remove controls */}
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '0.3rem' }}>
                       <button type="button" onClick={() => moveFile(i, -1)} disabled={i === 0}
-                        title="Move up" style={{
+                        title="Move left" style={{
                           border: '1px solid var(--border-base)', borderRadius: 4, background: '#fff',
                           cursor: i === 0 ? 'not-allowed' : 'pointer', padding: '1px 4px', opacity: i === 0 ? 0.4 : 1,
                         }}>
                         <ChevronUp size={11} />
                       </button>
                       <button type="button" onClick={() => moveFile(i, 1)} disabled={i === fileEntries.length - 1}
-                        title="Move down" style={{
+                        title="Move right" style={{
                           border: '1px solid var(--border-base)', borderRadius: 4, background: '#fff',
                           cursor: i === fileEntries.length - 1 ? 'not-allowed' : 'pointer', padding: '1px 4px',
                           opacity: i === fileEntries.length - 1 ? 0.4 : 1,
                         }}>
                         <ChevronDown size={11} />
                       </button>
-                      <button type="button" onClick={() => removeFile(i)} title="Remove"
+                      <button type="button" onClick={() => removeFile(i)} title="Remove page"
                         style={{ border: '1px solid var(--color-error-300)', borderRadius: 4, background: '#fff', cursor: 'pointer', padding: '1px 4px' }}>
                         <X size={11} style={{ color: 'var(--color-error-500)' }} />
                       </button>
                     </div>
-                    <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.2rem',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {entry.file.name}
-                    </div>
                   </div>
                 ))}
               </div>
-
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleMerge}
-                disabled={merging}
-                style={{ marginTop: '0.75rem', width: '100%' }}
-              >
-                {merging
-                  ? <><Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> Combining pages…</>
-                  : <><Layers size={14} /> Combine {fileEntries.length} images into one PDF</>}
-              </button>
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.4rem' }}>
-                Or skip this and upload {fileEntries.length} files separately using the button below.
-              </p>
             </div>
           )}
 
@@ -624,12 +619,10 @@ export default function UploadPage() {
 
         <button type="submit" className="btn btn-primary btn-lg"
           disabled={uploading || merging || fileEntries.length === 0 || !rateLimit.allowed}>
-          {uploading ? (
-            <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Uploading…</>
-          ) : fileEntries.length > 1 ? (
-            <><Upload size={16} /> Upload {fileEntries.length} Files Separately</>
+          {uploading || merging ? (
+            <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> {merging ? 'Merging pages into PDF…' : 'Uploading…'}</>
           ) : (
-            <><Upload size={16} /> Submit Upload</>
+            <><Upload size={16} /> {fileEntries.length > 1 ? `Upload ${fileEntries.length}-Page PDF` : 'Submit Upload'}</>
           )}
         </button>
       </form>

@@ -7,7 +7,6 @@ import { useAppStore } from '@/lib/store'
 
 const CATEGORY_CARDS = [
   {
-    emoji: '📄',
     title: 'Previous Papers',
     desc: 'Mid-term, end-term and previous-year question papers.',
     to: '/papers',
@@ -16,7 +15,6 @@ const CATEGORY_CARDS = [
     bg: 'var(--color-primary-50)',
   },
   {
-    emoji: '🧪',
     title: 'Lab Resources',
     desc: 'Lab papers, experiments, viva questions and manuals.',
     to: '/labs',
@@ -25,7 +23,6 @@ const CATEGORY_CARDS = [
     bg: '#f5f3ff',
   },
   {
-    emoji: '📚',
     title: 'Study Resources',
     desc: 'Syllabus, notes and question banks.',
     to: '/resources',
@@ -34,7 +31,6 @@ const CATEGORY_CARDS = [
     bg: '#ecfdf5',
   },
   {
-    emoji: '📊',
     title: 'Exam Insights',
     desc: 'Topic frequency, weightage and repeated questions.',
     to: '/analytics',
@@ -43,7 +39,6 @@ const CATEGORY_CARDS = [
     bg: '#fffbeb',
   },
   {
-    emoji: '🎯',
     title: 'Study Prep',
     desc: 'Prioritized topics and last-minute preparation plans.',
     to: '/study',
@@ -52,7 +47,6 @@ const CATEGORY_CARDS = [
     bg: '#fff1f2',
   },
   {
-    emoji: '🔍',
     title: 'Search Everything',
     desc: 'Search across subjects, papers and resources.',
     to: '/search',
@@ -66,10 +60,10 @@ export default function HomePage() {
   const { subjects, papers, resources } = useAppStore()
 
   const STATS = [
-    { value: `${subjects.length}+`, label: 'Subjects', icon: BookOpen },
-    { value: `${papers.length}+`, label: 'Papers', icon: FileText },
-    { value: `${resources.length}+`, label: 'Resources', icon: Library },
-    { value: '100%', label: 'Free', icon: Star },
+    { value: String(subjects.length),  label: 'Subjects',  icon: BookOpen },
+    { value: String(papers.length),    label: 'Papers',    icon: FileText },
+    { value: String(resources.length), label: 'Resources', icon: Library },
+    { value: '100%',                   label: 'Free',      icon: Star },
   ]
 
   return (
@@ -169,7 +163,7 @@ export default function HomePage() {
         gap: '1rem',
         marginBottom: '2rem',
       }}>
-        {CATEGORY_CARDS.map(({ emoji, title, desc, to, color, bg }) => (
+        {CATEGORY_CARDS.map(({ title, desc, to, icon: Icon, color, bg }) => (
           <Link
             key={to}
             to={to}
@@ -189,9 +183,9 @@ export default function HomePage() {
               background: bg,
               borderRadius: 'var(--radius-md)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1.375rem',
+              color,
             }}>
-              {emoji}
+              <Icon size={22} />
             </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>

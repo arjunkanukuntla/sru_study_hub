@@ -252,9 +252,6 @@ export default function PaperDetailPage() {
                 <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={toggleFullScreen}>
                   <Maximize2 size={14} /> Full Screen View
                 </button>
-                <a href={paper.file_url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ justifyContent: 'center' }}>
-                  <ExternalLink size={14} /> Open in Browser
-                </a>
                 <a href={paper.file_url} download className="btn btn-secondary" style={{ justifyContent: 'center' }}>
                   <Download size={14} /> Download
                 </a>

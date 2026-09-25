@@ -124,8 +124,39 @@ export const STUDY_YEARS = [
   { id: '4', label: '4th Year' },
 ]
 
-// ─── Initial Catalog Data (100% User-Content-Driven — Zero Mock Data) ───
-export const INITIAL_SUBJECTS: Subject[] = []
+// ─── Initial Catalog Data ───
+export const INITIAL_SUBJECTS: Subject[] = [
+  // CSE / CSE-AIML / CSE-DS
+  { id: 'sub-dsa', name: 'Data Structures and Algorithms', code: 'CS201', branch_id: 'cse', semester_id: 'sem1', credits: 4, type: 'both', units_count: 5 },
+  { id: 'sub-dbms', name: 'Database Management Systems', code: 'CS202', branch_id: 'cse', semester_id: 'sem2', credits: 4, type: 'both', units_count: 5 },
+  { id: 'sub-os', name: 'Operating Systems', code: 'CS301', branch_id: 'cse', semester_id: 'sem3', credits: 4, type: 'both', units_count: 5 },
+  { id: 'sub-cn', name: 'Computer Networks', code: 'CS302', branch_id: 'cse', semester_id: 'sem4', credits: 4, type: 'both', units_count: 5 },
+  { id: 'sub-python', name: 'Problem Solving using Python (psup)', code: 'CS101', branch_id: 'cse-aiml', semester_id: 'sem1', credits: 3, type: 'both', units_count: 5 },
+  { id: 'sub-aiml', name: 'Artificial Intelligence & Machine Learning', code: 'AI201', branch_id: 'cse-aiml', semester_id: 'sem2', credits: 4, type: 'both', units_count: 5 },
+  { id: 'sub-ccb', name: 'computational chemistry and biology(ccb)', code: 'BS102', branch_id: 'cse-aiml', semester_id: 'sem1', credits: 3, type: 'theory', units_count: 5 },
+  { id: 'sub-ims', name: 'information management system(ims)', code: 'CS103', branch_id: 'cse-aiml', semester_id: 'sem1', credits: 3, type: 'theory', units_count: 5 },
+  { id: 'sub-wtmp', name: 'web technologies and mobile programming(wtmp)', code: 'CS104', branch_id: 'cse-aiml', semester_id: 'sem1', credits: 4, type: 'both', units_count: 5 },
+  { id: 'sub-la', name: 'Linear Algebra and Numerical Methods', code: 'BS101', branch_id: 'cse-aiml', semester_id: 'sem1', credits: 4, type: 'theory', units_count: 5 },
+  { id: 'sub-cloud', name: 'cloud computing', code: 'CS305', branch_id: 'cse-aiml', semester_id: 'sem1', credits: 3, type: 'theory', units_count: 5 },
+  { id: 'sub-eee', name: 'Electrical Engineering (CSE)', code: 'EE101', branch_id: 'eee', semester_id: 'sem1', credits: 3, type: 'theory', units_count: 5 },
+
+  // ECE
+  { id: 'sub-dsp', name: 'Digital Signal Processing', code: 'EC301', branch_id: 'ece', semester_id: 'sem3', credits: 4, type: 'both', units_count: 5 },
+  { id: 'sub-vlsi', name: 'VLSI Design', code: 'EC401', branch_id: 'ece', semester_id: 'sem5', credits: 4, type: 'both', units_count: 5 },
+
+  // EEE
+  { id: 'sub-circuits', name: 'Electric Circuit Analysis', code: 'EE201', branch_id: 'eee', semester_id: 'sem2', credits: 4, type: 'both', units_count: 5 },
+  { id: 'sub-machines', name: 'Electrical Machines', code: 'EE202', branch_id: 'eee', semester_id: 'sem3', credits: 4, type: 'both', units_count: 5 },
+
+  // MECH
+  { id: 'sub-thermo', name: 'Thermodynamics', code: 'ME201', branch_id: 'mech', semester_id: 'sem2', credits: 4, type: 'theory', units_count: 5 },
+  { id: 'sub-fm', name: 'Fluid Mechanics & Hydraulic Machines', code: 'ME301', branch_id: 'mech', semester_id: 'sem3', credits: 4, type: 'both', units_count: 5 },
+
+  // CIVIL
+  { id: 'sub-sa', name: 'Structural Analysis', code: 'CE201', branch_id: 'civil', semester_id: 'sem2', credits: 4, type: 'theory', units_count: 5 },
+  { id: 'sub-surveying', name: 'Surveying & Geomatics', code: 'CE102', branch_id: 'civil', semester_id: 'sem1', credits: 4, type: 'both', units_count: 5 },
+]
+
 export const INITIAL_UNITS: Unit[] = []
 export const INITIAL_PAPERS: Paper[] = []
 export const INITIAL_TOPICS: Topic[] = []
@@ -164,9 +195,6 @@ export function getFrequencyClass(appearances: number): string {
   return 'freq-less'
 }
 
-export function getFrequencyEmoji(appearances: number): string {
-  if (appearances >= 6) return '🔥'
-  if (appearances >= 4) return '🟠'
-  if (appearances >= 2) return '🟡'
-  return '⚪'
+export function getFrequencyEmoji(_appearances: number): string {
+  return ''
 }
