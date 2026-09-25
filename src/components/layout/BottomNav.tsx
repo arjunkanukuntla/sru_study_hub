@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, BookOpen, FileText, Brain, MoreHorizontal } from 'lucide-react'
+import { Home, BookOpen, FileText, Brain, MoreHorizontal, FlaskConical, Library, BarChart3, Search, Star, Upload, Info } from 'lucide-react'
 import { useState } from 'react'
 
 const PRIMARY_ITEMS = [
@@ -42,14 +42,14 @@ export function BottomNav() {
           animation: 'scale-in 0.15s ease',
         }}>
           {[
-            { to: '/labs',      label: 'Labs',      emoji: '🧪' },
-            { to: '/resources', label: 'Resources',  emoji: '📚' },
-            { to: '/analytics', label: 'Analytics',  emoji: '📊' },
-            { to: '/search',    label: 'Search',     emoji: '🔍' },
-            { to: '/my-study',  label: 'My Study',   emoji: '⭐' },
-            { to: '/upload',    label: 'Upload',     emoji: '⬆️' },
-            { to: '/about',     label: 'About',      emoji: 'ℹ️' },
-          ].map(({ to, label, emoji }) => (
+            { to: '/labs',      label: 'Labs',      icon: FlaskConical, color: '#7c3aed' },
+            { to: '/resources', label: 'Resources',  icon: Library,      color: '#059669' },
+            { to: '/analytics', label: 'Analytics',  icon: BarChart3,    color: '#d97706' },
+            { to: '/search',    label: 'Search',     icon: Search,       color: '#0891b2' },
+            { to: '/my-study',  label: 'My Study',   icon: Star,         color: '#eab308' },
+            { to: '/upload',    label: 'Upload',     icon: Upload,       color: 'var(--color-primary-600)' },
+            { to: '/about',     label: 'About',      icon: Info,         color: 'var(--text-muted)' },
+          ].map(({ to, label, icon: Icon, color }) => (
             <NavLink
               key={to}
               to={to}
@@ -68,7 +68,7 @@ export function BottomNav() {
               }}
               className="more-menu-item"
             >
-              <span style={{ fontSize: '1.1rem' }}>{emoji}</span>
+              <Icon size={16} style={{ color }} />
               {label}
             </NavLink>
           ))}

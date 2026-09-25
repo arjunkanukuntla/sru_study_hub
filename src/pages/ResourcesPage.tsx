@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Library, Upload } from 'lucide-react'
+import { Library, Upload, BookOpen, FlaskConical, FileText } from 'lucide-react'
 import { BRANCHES, ACADEMIC_YEARS, RESOURCE_TYPES } from '@/data/catalog'
 import { useAppStore } from '@/lib/store'
 
 const TYPE_TABS = [
-  { value: '', label: '📚 All' },
-  { value: 'syllabus', label: '📘 Syllabus' },
-  { value: 'notes', label: '📝 Notes' },
-  { value: 'question_bank', label: '📋 Question Banks' },
-  { value: 'reference', label: '📖 Reference' },
-  { value: 'lab_manual', label: '🧪 Lab Manuals' },
+  { value: '', label: 'All' },
+  { value: 'syllabus', label: 'Syllabus' },
+  { value: 'notes', label: 'Notes' },
+  { value: 'question_bank', label: 'Question Banks' },
+  { value: 'reference', label: 'Reference' },
+  { value: 'lab_manual', label: 'Lab Manuals' },
 ]
 
 export default function ResourcesPage() {
@@ -89,7 +89,15 @@ export default function ResourcesPage() {
                 width: 44, height: 44, borderRadius: 'var(--radius-md)', flexShrink: 0,
                 background: 'var(--color-primary-50)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.375rem',
               }}>
-                {res.type === 'syllabus' ? '📘' : res.type === 'lab_manual' ? '🧪' : res.type === 'notes' ? '📝' : res.type === 'question_bank' ? '📋' : '📖'}
+                {res.type === 'syllabus' ? (
+                  <BookOpen size={18} style={{ color: 'var(--color-primary-600)' }} />
+                ) : res.type === 'lab_manual' ? (
+                  <FlaskConical size={18} style={{ color: '#7c3aed' }} />
+                ) : res.type === 'notes' ? (
+                  <FileText size={18} style={{ color: '#059669' }} />
+                ) : (
+                  <Library size={18} style={{ color: '#d97706' }} />
+                )}
               </div>
 
               <div style={{ flex: 1, minWidth: 200 }}>

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { BookOpen, Search, Plus, X } from 'lucide-react'
+import { BookOpen, Search, Plus, X, FlaskConical, Library } from 'lucide-react'
 import { BRANCHES, STUDY_YEARS } from '@/data/catalog'
 import { useAppStore } from '@/lib/store'
 
@@ -286,7 +286,13 @@ export default function SubjectsPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '1.125rem',
                   }}>
-                    {subject.type === 'lab' ? '🧪' : subject.type === 'both' ? '📚' : '📖'}
+                    {subject.type === 'lab' ? (
+                      <FlaskConical size={18} style={{ color: '#7c3aed' }} />
+                    ) : subject.type === 'both' ? (
+                      <Library size={18} style={{ color: '#059669' }} />
+                    ) : (
+                      <BookOpen size={18} style={{ color: 'var(--color-primary-600)' }} />
+                    )}
                   </div>
                   <div>
                     <span className="badge badge-neutral">{subject.code}</span>

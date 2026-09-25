@@ -152,7 +152,9 @@ export default function MyStudyPage() {
               <div className="grid-subjects">
                 {favSubjects.map(s => s && (
                   <Link key={s.id} to={`/subjects/${s.id}`} className="card card-hover" style={{ padding: '1rem', textDecoration: 'none', display: 'flex', gap: '0.625rem', alignItems: 'center' }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'var(--color-primary-50)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.125rem', flexShrink: 0 }}>📖</div>
+                    <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'var(--color-primary-50)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <BookOpen size={16} style={{ color: 'var(--color-primary-600)' }} />
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.code}</div>
@@ -200,7 +202,15 @@ export default function MyStudyPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
                 {favResources.map(r => r && (
                   <div key={r.id} className="card" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span style={{ fontSize: '1.25rem' }}>{r.type === 'syllabus' ? '📘' : r.type === 'notes' ? '📝' : '📋'}</span>
+                    <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--color-primary-50)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {r.type === 'syllabus' ? (
+                        <BookOpen size={16} style={{ color: 'var(--color-primary-600)' }} />
+                      ) : r.type === 'notes' ? (
+                        <FileText size={16} style={{ color: '#059669' }} />
+                      ) : (
+                        <Library size={16} style={{ color: '#d97706' }} />
+                      )}
+                    </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{r.title}</div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{r.subject_name}</div>

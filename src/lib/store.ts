@@ -4,7 +4,7 @@ import type { Subject, Paper, Resource, Unit, Topic, LabExperiment, VivaQuestion
 import {
   INITIAL_SUBJECTS, INITIAL_PAPERS, INITIAL_RESOURCES,
   INITIAL_UNITS, INITIAL_TOPICS, INITIAL_LAB_EXPERIMENTS,
-  INITIAL_VIVA_QUESTIONS
+  INITIAL_VIVA_QUESTIONS, BRANCHES
 } from '@/data/catalog'
 import {
   fetchCloudData,
@@ -55,31 +55,97 @@ export const useAppStore = create<AppState>()(
           const cloud = await fetchCloudData()
           console.log(`☁️ Cloud sync: ${cloud.papers.length} papers, ${cloud.resources.length} resources, ${cloud.subjects.length} subjects`)
 
-          set((state) => {
-            // Subjects: merge cloud into initial, cloud wins on conflict
-            const builtInSubIds = new Set(INITIAL_SUBJECTS.map(s => s.id))
-            const cloudSubIds = new Set(cloud.subjects.map(s => s.id))
-            const builtInsNotInCloud = state.subjects.filter(s => builtInSubIds.has(s.id) && !cloudSubIds.has(s.id))
+          set((_state) => {
+            // ── Build complete authoritative Subjects list ──────────────────────
+            const subjectMap = new Map<string, Subject>()
 
-            const mergedSubjects = [...builtInsNotInCloud, ...cloud.subjects]
-
-            // ── Build subject lookup: "name|branch_code" → local subject id ──
-            // Cloud papers store subject_id as a deterministic UUID; this lookup lets
-            // us remap them back to the catalog's local string IDs for consistent filtering.
-            const subjectKeyToId = new Map<string, string>()
-            for (const s of mergedSubjects) {
-              const branchCode = (s as any).branch_code || (s as any).branch_id || ''
-              const key = `${s.name.toLowerCase().trim()}|${branchCode.toLowerCase()}`
-              subjectKeyToId.set(key, s.id)
+            const registerSubject = (s: Subject) => {
+              const normName = s.name.toLowerCase().trim()
+              if (!normName) return
+              if (!subjectMap.has(normName)) {
+                subjectMap.set(normName, s)
+              }
             }
 
-            const remapSubjectId = <T extends { subject_id: string; subject_name?: string; branch_code?: string }>(item: T): T => {
-              const key = `${(item.subject_name || '').toLowerCase().trim()}|${(item.branch_code || '').toLowerCase()}`
-              const localId = subjectKeyToId.get(key)
-              return localId && localId !== item.subject_id ? { ...item, subject_id: localId } : item
+            // 1. Always load ALL base catalog subjects first
+            for (const s of INITIAL_SUBJECTS) {
+              registerSubject(s)
             }
 
-            // ── Deduplicate by sha256 (safety net in case DB has duplicate rows) ──
+            // 2. Merge explicit cloud subjects from Supabase
+            for (const s of cloud.subjects) {
+              registerSubject(s)
+            }
+
+            // 3. Extract any subjects present in uploaded cloud papers
+            for (const p of cloud.papers) {
+              if (p.subject_name) {
+                const normName = p.subject_name.toLowerCase().trim()
+                if (!subjectMap.has(normName)) {
+                  const branchCode = p.branch_code || 'CSE'
+                  const matchingBranch = BRANCHES.find(
+                    b => b.code.toLowerCase() === branchCode.toLowerCase() || b.id.toLowerCase() === branchCode.toLowerCase()
+                  )
+                  const branchId = matchingBranch ? matchingBranch.id : 'cse'
+
+                  const cleanName = p.subject_name.trim()
+                  const code = cleanName.split(' ').map(w => w[0]?.toUpperCase() || '').join('').slice(0, 4) + '101'
+                  const dynamicSub: Subject = {
+                    id: p.subject_id || `sub-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                    name: cleanName,
+                    code,
+                    branch_id: branchId,
+                    semester_id: `sem${p.semester_number || 1}`,
+                    credits: 3,
+                    type: 'theory',
+                    units_count: 5,
+                  }
+                  registerSubject(dynamicSub)
+                }
+              }
+            }
+
+            // 4. Extract any subjects present in uploaded cloud resources
+            for (const r of cloud.resources) {
+              if (r.subject_name) {
+                const normName = r.subject_name.toLowerCase().trim()
+                if (!subjectMap.has(normName)) {
+                  const branchCode = r.branch_code || 'CSE'
+                  const matchingBranch = BRANCHES.find(
+                    b => b.code.toLowerCase() === branchCode.toLowerCase() || b.id.toLowerCase() === branchCode.toLowerCase()
+                  )
+                  const branchId = matchingBranch ? matchingBranch.id : 'cse'
+
+                  const cleanName = r.subject_name.trim()
+                  const code = cleanName.split(' ').map(w => w[0]?.toUpperCase() || '').join('').slice(0, 4) + '101'
+                  const dynamicSub: Subject = {
+                    id: r.subject_id || `sub-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                    name: cleanName,
+                    code,
+                    branch_id: branchId,
+                    semester_id: 'sem1',
+                    credits: 3,
+                    type: 'theory',
+                    units_count: 5,
+                  }
+                  registerSubject(dynamicSub)
+                }
+              }
+            }
+
+            const mergedSubjects = Array.from(subjectMap.values())
+
+            // ── Remap paper/resource subject_ids to match unified subject IDs ──
+            const remapSubjectId = <T extends { subject_id: string; subject_name?: string }>(item: T): T => {
+              const normName = (item.subject_name || '').toLowerCase().trim()
+              const matchedSubject = subjectMap.get(normName)
+              if (matchedSubject) {
+                return { ...item, subject_id: matchedSubject.id, subject_name: matchedSubject.name }
+              }
+              return item
+            }
+
+            // ── Deduplicate by sha256 ──
             const dedupBySha256 = <T extends { sha256?: string }>(items: T[]): T[] => {
               const seen = new Set<string>()
               return items.filter(item => {
@@ -90,8 +156,6 @@ export const useAppStore = create<AppState>()(
               })
             }
 
-            // Remap subject_ids then dedup
-            // Cloud is authoritative: do not merge stale deleted items from local state
             const allPapers    = dedupBySha256(cloud.papers.map(remapSubjectId))
             const allResources = dedupBySha256(cloud.resources.map(remapSubjectId))
 

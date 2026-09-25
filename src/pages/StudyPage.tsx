@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Brain, Clock, CheckCircle, Circle, BookOpen } from 'lucide-react'
+import { Brain, Clock, CheckCircle, Circle, BookOpen, Calendar, Zap, FileText } from 'lucide-react'
 import { BRANCHES, getFrequencyLabel, getFrequencyEmoji } from '@/data/catalog'
 import { useAppStore } from '@/lib/store'
 
@@ -20,21 +20,21 @@ function generatePlan(subjectId: string, hours: number, topics: any[], units: an
 
   if (hours <= 2) {
     sortedTopics.slice(0, 3).forEach((t, i) => {
-      items.push({ id: t.id, label: `${getFrequencyEmoji(t.appearances)} ${t.name} (Unit ${t.unit_number})`, priority: i + 1, done: false })
+      items.push({ id: t.id, label: `${t.name} (Unit ${t.unit_number})`, priority: i + 1, done: false })
     })
-    items.push({ id: 'prev', label: '📝 Review any available previous papers', priority: 4, done: false })
+    items.push({ id: 'prev', label: 'Review any available previous papers', priority: 4, done: false })
   } else if (hours <= 12) {
     sortedTopics.slice(0, 5).forEach((t, i) => {
-      items.push({ id: t.id, label: `${getFrequencyEmoji(t.appearances)} ${t.name} (Unit ${t.unit_number}) — ${getFrequencyLabel(t.appearances)}`, priority: i + 1, done: false })
+      items.push({ id: t.id, label: `${t.name} (Unit ${t.unit_number}) — ${getFrequencyLabel(t.appearances)}`, priority: i + 1, done: false })
     })
-    items.push({ id: 'prev-paper', label: '📄 Previous paper practice', priority: 6, done: false })
-    items.push({ id: 'revision', label: '🔄 Quick revision of key formulas/concepts', priority: 7, done: false })
+    items.push({ id: 'prev-paper', label: 'Previous paper practice', priority: 6, done: false })
+    items.push({ id: 'revision', label: 'Quick revision of key formulas/concepts', priority: 7, done: false })
   } else {
     units.forEach((u) => {
-      items.push({ id: `u-${u.id}`, label: `📘 Unit ${u.number}: ${u.title}`, priority: u.number, done: false })
+      items.push({ id: `u-${u.id}`, label: `Unit ${u.number}: ${u.title}`, priority: u.number, done: false })
     })
-    items.push({ id: 'practice', label: '📄 Previous paper practice', priority: units.length + 1, done: false })
-    items.push({ id: 'revision', label: '🔄 Full revision', priority: units.length + 2, done: false })
+    items.push({ id: 'practice', label: 'Previous paper practice', priority: units.length + 1, done: false })
+    items.push({ id: 'revision', label: 'Full revision', priority: units.length + 2, done: false })
   }
 
   return items
@@ -185,7 +185,7 @@ export default function StudyPage() {
 
           {completedCount === totalCount && totalCount > 0 && (
             <div className="alert alert-success" style={{ marginTop: '1rem' }}>
-              🎉 All done! Good luck with your exam!
+              All done! Good luck with your exam!
             </div>
           )}
         </div>
@@ -200,23 +200,26 @@ export default function StudyPage() {
         {[
           {
             title: '7-Day Plan',
-            icon: '📅',
+            icon: Calendar,
+            color: 'var(--color-primary-600)',
             steps: ['Day 1 → Unit 1', 'Day 2 → Unit 2', 'Day 3 → Unit 3', 'Day 4 → Unit 4', 'Day 5 → Unit 5', 'Day 6 → Previous papers', 'Day 7 → Revision'],
           },
           {
             title: '1-Day Emergency Plan',
-            icon: '⚡',
+            icon: Zap,
+            color: '#d97706',
             steps: ['Priority 1 → Frequently appeared topics', 'Priority 2 → High-weightage units', 'Priority 3 → Repeated questions', 'Priority 4 → Remaining syllabus'],
           },
           {
             title: 'Paper Practice Strategy',
-            icon: '📄',
+            icon: FileText,
+            color: '#059669',
             steps: ['Solve 2–3 previous papers', 'Note repeated question patterns', 'Identify your weak topics', 'Revise those topics focused', 'Re-attempt weak sections'],
           },
-        ].map(({ title, icon, steps }) => (
+        ].map(({ title, icon: Icon, color, steps }) => (
           <div key={title} className="card" style={{ padding: '1.25rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.875rem' }}>
-              <span style={{ fontSize: '1.375rem' }}>{icon}</span>
+              <Icon size={18} style={{ color }} />
               <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{title}</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>

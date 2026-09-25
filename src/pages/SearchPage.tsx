@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Link } from 'react-router-dom'
-import { Search, BookOpen, FileText, Library, X } from 'lucide-react'
+import { Search, BookOpen, FileText, Library, X, FlaskConical } from 'lucide-react'
 import { BRANCHES } from '@/data/catalog'
 import type { Subject, Paper, Resource } from '@/data/catalog'
 import { debounce } from '@/lib/fileUtils'
@@ -173,7 +173,9 @@ export default function SearchPage() {
                   const branch = BRANCHES.find(b => b.id === s.branch_id)
                   return (
                     <Link key={s.id} to={`/subjects/${s.id}`} className="card card-hover" style={{ padding: '1rem', textDecoration: 'none', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'var(--color-primary-50)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.125rem', flexShrink: 0 }}>📖</div>
+                      <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'var(--color-primary-50)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <BookOpen size={16} style={{ color: 'var(--color-primary-600)' }} />
+                      </div>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{s.name}</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{s.code} · {branch?.code} · Sem {s.semester_id.replace('sem', '')}</div>
@@ -208,9 +210,17 @@ export default function SearchPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
                 {results.resources.map(r => (
                   <div key={r.id} className="card" style={{ padding: '0.875rem 1.125rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span style={{ fontSize: '1.25rem' }}>
-                      {r.type === 'syllabus' ? '📘' : r.type === 'lab_manual' ? '🧪' : r.type === 'notes' ? '📝' : '📋'}
-                    </span>
+                    <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--color-primary-50)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {r.type === 'syllabus' ? (
+                        <BookOpen size={16} style={{ color: 'var(--color-primary-600)' }} />
+                      ) : r.type === 'lab_manual' ? (
+                        <FlaskConical size={16} style={{ color: '#7c3aed' }} />
+                      ) : r.type === 'notes' ? (
+                        <FileText size={16} style={{ color: '#059669' }} />
+                      ) : (
+                        <Library size={16} style={{ color: '#d97706' }} />
+                      )}
+                    </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{r.title}</div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{r.subject_name} · {r.type.replace('_', ' ')}</div>

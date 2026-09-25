@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Analytics } from '@vercel/analytics/react'
+import { BookOpen } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { getAnonId } from '@/lib/anonId'
 import { useAppStore } from '@/lib/store'
@@ -126,7 +127,7 @@ export default function App() {
 function NotFoundPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center', padding: '2rem' }}>
-      <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>📚</div>
+      <BookOpen size={48} style={{ color: 'var(--color-primary-500)', marginBottom: '1rem' }} />
       <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Page not found</h1>
       <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>The page you're looking for doesn't exist.</p>
       <a href="/" className="btn btn-primary">Go Home</a>

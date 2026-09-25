@@ -324,7 +324,7 @@ export default function UploadPage() {
               : `${doneCount} of ${fileEntries.length} files uploaded`}
           </h1>
           <p style={{ color: 'var(--text-muted)', marginBottom: errorCount ? '0.75rem' : '2rem', lineHeight: 1.7 }}>
-            Your material is now live and available to all SR University students. 🎉
+            Your material is now live and available to all SR University students.
           </p>
           {errorCount > 0 && (
             <p style={{ color: 'var(--color-error-500)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>

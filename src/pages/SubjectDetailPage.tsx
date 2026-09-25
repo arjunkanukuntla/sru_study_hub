@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useState } from 'react'
-import { ArrowLeft, FileText, Library, BarChart3, BookOpen, Brain, Upload } from 'lucide-react'
+import { ArrowLeft, FileText, Library, BarChart3, BookOpen, Brain, Upload, FlaskConical } from 'lucide-react'
 import { BRANCHES, getFrequencyLabel, getFrequencyClass, getFrequencyEmoji } from '@/data/catalog'
 import { PaperCard } from '@/components/papers/PaperCard'
 import { useAppStore } from '@/lib/store'
@@ -194,7 +194,7 @@ export default function SubjectDetailPage() {
         <div>
           <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
             <div style={{ fontSize: '0.8125rem' }}>
-              ⚠️ <strong>Disclaimer:</strong> Topic importance is calculated from available uploaded papers only.
+              <strong>Disclaimer:</strong> Topic importance is calculated from available uploaded papers only.
               This does not guarantee that these topics will appear in future exams.
             </div>
           </div>
@@ -269,7 +269,15 @@ export default function SubjectDetailPage() {
                     background: 'var(--color-primary-50)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem',
                   }}>
-                    {res.type === 'syllabus' ? '📘' : res.type === 'lab_manual' ? '🧪' : res.type === 'notes' ? '📝' : '📋'}
+                    {res.type === 'syllabus' ? (
+                      <BookOpen size={18} style={{ color: 'var(--color-primary-600)' }} />
+                    ) : res.type === 'lab_manual' ? (
+                      <FlaskConical size={18} style={{ color: '#7c3aed' }} />
+                    ) : res.type === 'notes' ? (
+                      <FileText size={18} style={{ color: '#059669' }} />
+                    ) : (
+                      <Library size={18} style={{ color: '#d97706' }} />
+                    )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.2rem' }}>{res.title}</div>
